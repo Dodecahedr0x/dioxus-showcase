@@ -142,7 +142,7 @@ mod tests {
 
     impl StoryArg for DemoArgs {
         fn story_arg() -> Self {
-            Self::default()
+            Default::default()
         }
     }
 
@@ -163,7 +163,7 @@ mod tests {
 
     impl StoryProps for DemoProps {
         fn stories() -> Vec<StoryVariant<Self>> {
-            vec![StoryVariant::unnamed(Self::default())]
+            vec![StoryVariant::unnamed(Default::default())]
         }
     }
 

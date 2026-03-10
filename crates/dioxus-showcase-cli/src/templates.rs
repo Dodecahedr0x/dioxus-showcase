@@ -28,6 +28,7 @@ struct RuntimeComponent {
 #[derive(Serialize)]
 struct CargoTemplateContext {
     package_name: String,
+    package_version: String,
     entry_crate_package_name: String,
     entry_crate_dependency_path: String,
 }
@@ -85,6 +86,7 @@ pub fn render_showcase_app_cargo_toml(config: &ShowcaseConfig) -> Result<String,
         SHOWCASE_CARGO_TEMPLATE,
         &CargoTemplateContext {
             package_name,
+            package_version: env!("CARGO_PKG_VERSION").to_owned(),
             entry_crate_package_name,
             entry_crate_dependency_path: escape_toml_string(&entry_crate_dependency_path),
         },
@@ -123,7 +125,6 @@ fn discover_entry_crate_package_name(config: &ShowcaseConfig) -> Result<String, 
 
     let mut section: Option<&str> = None;
     let mut package_name: Option<String> = None;
-    let mut lib_name: Option<String> = None;
 
     for raw_line in content.lines() {
         let line = raw_line.trim();
@@ -143,18 +144,11 @@ fn discover_entry_crate_package_name(config: &ShowcaseConfig) -> Result<String, 
 
         match section {
             Some("package") if key == "name" => package_name = Some(parse_toml_string(value)?),
-            Some("lib") if key == "name" => lib_name = Some(parse_toml_string(value)?),
             _ => {}
         }
     }
 
-    if let Some(lib_name) = lib_name {
-        return Ok(lib_name);
-    }
-
-    let package_name = package_name
-        .ok_or_else(|| format!("missing [package].name in {}", cargo_toml_path.display()))?;
-    Ok(package_name.replace('-', "_"))
+    package_name.ok_or_else(|| format!("missing [package].name in {}", cargo_toml_path.display()))
 }
 
 fn parse_toml_string(value: &str) -> Result<String, String> {
@@ -260,7 +254,9 @@ mod tests {
         config.project.showcase_crate = showcase_dir.to_string_lossy().to_string();
 
         let cargo_toml = render_showcase_app_cargo_toml(&config).expect("render cargo");
-        assert!(cargo_toml.contains("showcase_entry = { package = \"basic_example\""));
+        assert!(cargo_toml.contains(&format!("version = \"{}\"", env!("CARGO_PKG_VERSION"))));
+        assert!(cargo_toml.contains("[workspace]"));
+        assert!(cargo_toml.contains("showcase_entry = { package = \"basic-example\""));
         assert!(cargo_toml.contains("path = \"..\""));
 
         let _ = std::fs::remove_dir_all(&dir);

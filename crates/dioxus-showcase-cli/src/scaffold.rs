@@ -182,42 +182,6 @@ fn collect_stylesheets(
     Ok(())
 }
 
-pub fn ensure_showcase_workspace_member(config: &ShowcaseConfig) -> Result<bool, String> {
-    let root_cargo = Path::new("Cargo.toml");
-    if !root_cargo.exists() {
-        return Ok(false);
-    }
-
-    let content = fs::read_to_string(root_cargo)
-        .map_err(|err| format!("failed to read {}: {err}", root_cargo.display()))?;
-    let member_value = format!("\"{}\"", config.project.showcase_crate);
-    if content.contains(&member_value) {
-        return Ok(false);
-    }
-
-    let members_start = content
-        .find("members")
-        .ok_or_else(|| "failed to find workspace members array in Cargo.toml".to_owned())?;
-    let array_start_rel = content[members_start..]
-        .find('[')
-        .ok_or_else(|| "failed to parse workspace members array in Cargo.toml".to_owned())?;
-    let array_start = members_start + array_start_rel;
-    let array_end_rel = content[array_start..]
-        .find(']')
-        .ok_or_else(|| "failed to parse workspace members array end in Cargo.toml".to_owned())?;
-    let array_end = array_start + array_end_rel;
-
-    let insert_line = format!("  \"{}\",\n", config.project.showcase_crate);
-    let mut updated = String::with_capacity(content.len() + insert_line.len());
-    updated.push_str(&content[..array_end]);
-    updated.push_str(&insert_line);
-    updated.push_str(&content[array_end..]);
-
-    fs::write(root_cargo, updated)
-        .map_err(|err| format!("failed to update {}: {err}", root_cargo.display()))?;
-    Ok(true)
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -225,7 +189,7 @@ mod tests {
 
     use dioxus_showcase_core::{ShowcaseConfig, StoryDefinition};
 
-    use super::{ensure_showcase_workspace_member, write_artifacts};
+    use super::write_artifacts;
 
     fn temp_dir(prefix: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -235,35 +199,6 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("{prefix}-{unique}"));
         std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
-    }
-
-    #[test]
-    fn ensure_showcase_workspace_member_inserts_member() {
-        let dir = temp_dir("dioxus-showcase-workspace-member");
-        let root_cargo = dir.join("Cargo.toml");
-        std::fs::write(
-            &root_cargo,
-            r#"[workspace]
-members = [
-  "crates/a",
-]
-"#,
-        )
-        .expect("write cargo");
-
-        let mut config = ShowcaseConfig::default();
-        config.project.showcase_crate = "showcase".to_owned();
-
-        let previous = std::env::current_dir().expect("cwd");
-        std::env::set_current_dir(&dir).expect("switch cwd");
-        let added = ensure_showcase_workspace_member(&config).expect("update workspace");
-        std::env::set_current_dir(previous).expect("restore cwd");
-
-        assert!(added);
-        let updated = std::fs::read_to_string(&root_cargo).expect("read updated cargo");
-        assert!(updated.contains("\"showcase\""));
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

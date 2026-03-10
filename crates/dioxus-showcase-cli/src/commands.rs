@@ -12,7 +12,6 @@ use crate::check::cmd_check;
 use crate::cli::Command;
 use crate::dev::cmd_dev;
 use crate::scaffold::ensure_showcase_app_scaffold;
-use crate::scaffold::ensure_showcase_workspace_member;
 use crate::scaffold::showcase_app_dir;
 
 pub fn run(command: Option<Command>) -> Result<(), String> {
@@ -48,16 +47,12 @@ pub fn cmd_init() -> Result<(), String> {
 
     let app_dir = showcase_app_dir(&config);
     let created_app = ensure_showcase_app_scaffold(&config)?;
-    let added_workspace_member = ensure_showcase_workspace_member(&config)?;
 
     println!("Wrote DioxusShowcase.toml.");
     if created_app {
         println!("Created showcase app crate at {}", app_dir.display());
     } else {
         println!("Showcase app crate already exists at {}", app_dir.display());
-    }
-    if added_workspace_member {
-        println!("Added showcase crate to workspace members in Cargo.toml.");
     }
 
     println!("Run `dioxus-showcase dev` to launch with live updates.");

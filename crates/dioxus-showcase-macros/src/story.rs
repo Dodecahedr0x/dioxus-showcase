@@ -117,6 +117,24 @@ pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
     }
 }
 
+fn derive_story_title(
+    story_meta: &crate::utils::ShowcaseMeta,
+    fallback_story_name: &str,
+) -> Result<String, String> {
+    if let Some(title) = &story_meta.title {
+        return Ok(title.clone());
+    }
+
+    match (&story_meta.component, &story_meta.name) {
+        (Some(component), Some(name)) => Ok(format!("{component}/{name}")),
+        (Some(_), None) => {
+            Err("#[story(component = ComponentName)] also requires name = \"...\"".to_owned())
+        }
+        (None, Some(_)) => Err("#[story(name = ...)] also requires component = \"...\"".to_owned()),
+        (None, None) => Ok(fallback_story_name.to_owned()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::expand;
@@ -136,23 +154,5 @@ mod tests {
         let rendered = expanded.to_string();
         assert!(rendered.contains("story-preview"));
         assert!(rendered.contains("story-canvas"));
-    }
-}
-
-fn derive_story_title(
-    story_meta: &crate::utils::ShowcaseMeta,
-    fallback_story_name: &str,
-) -> Result<String, String> {
-    if let Some(title) = &story_meta.title {
-        return Ok(title.clone());
-    }
-
-    match (&story_meta.component, &story_meta.name) {
-        (Some(component), Some(name)) => Ok(format!("{component}/{name}")),
-        (Some(_), None) => {
-            Err("#[story(component = ComponentName)] also requires name = \"...\"".to_owned())
-        }
-        (None, Some(_)) => Err("#[story(name = ...)] also requires component = \"...\"".to_owned()),
-        (None, None) => Ok(fallback_story_name.to_owned()),
     }
 }

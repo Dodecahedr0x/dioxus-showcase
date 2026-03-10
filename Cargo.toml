@@ -5,7 +5,6 @@ members = [
   "crates/dioxus-showcase",
   "crates/dioxus-showcase-cli",
   "examples/*",
-  "examples/*/showcase",
 ]
 resolver = "2"
 

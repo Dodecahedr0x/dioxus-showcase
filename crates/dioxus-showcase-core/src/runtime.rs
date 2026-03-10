@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn build_story_navigation_accepts_slices_of_references() {
-        let stories = vec![StoryEntry {
+        let stories = [StoryEntry {
             definition: StoryDefinition {
                 id: "atoms-button".to_owned(),
                 title: "Atoms/Button".to_owned(),
