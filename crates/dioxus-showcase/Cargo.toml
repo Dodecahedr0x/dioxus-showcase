@@ -1,0 +1,22 @@
+[package]
+name = "dioxus-showcase"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Facade crate for building storybook-style Dioxus showcases."
+
+[lib]
+name = "dioxus_showcase"
+path = "src/lib.rs"
+
+[dependencies]
+dioxus = { workspace = true }
+dioxus-core = "0.7"
+dioxus-signals = "0.7"
+dioxus_elements = { package = "dioxus-html", version = "0.7" }
+dioxus-showcase-core = { workspace = true }
+dioxus-showcase-macros = { workspace = true }
+
+[lints]
+workspace = true

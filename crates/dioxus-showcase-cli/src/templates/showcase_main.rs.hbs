@@ -1,0 +1,558 @@
+use dioxus::prelude::*;
+use std::collections::BTreeSet;
+
+mod generated;
+
+fn main() {
+    launch(App);
+}
+
+impl dioxus_showcase::core::StoryTreeEntry for generated::ShowcaseComponentDefinition {
+    fn story_id(&self) -> &str {
+        &self.id
+    }
+
+    fn story_title(&self) -> &str {
+        &self.title
+    }
+}
+
+#[derive(Routable, Clone, PartialEq, Debug)]
+enum Route {
+    #[route("/")]
+    Home {},
+    #[route("/component/:id")]
+    Component { id: String },
+    #[route("/:..route")]
+    NotFound { route: Vec<String> },
+}
+
+#[component]
+fn App() -> Element {
+    use_context_provider(|| Signal::new(None::<String>));
+
+    rsx! {
+        {{#each stylesheets}}
+        document::Stylesheet { href: asset!("{{this}}") }
+        {{/each}}
+        style { {APP_CSS} }
+        Router::<Route> {}
+    }
+}
+
+fn showcase_navigation(
+    selected_tag: Option<&str>,
+) -> Vec<dioxus_showcase::core::StoryNavigationNode> {
+    let components = generated::showcase_components();
+    let filtered = components
+        .iter()
+        .filter(|component| {
+            selected_tag
+                .map(|tag| component.tags.iter().any(|component_tag| component_tag == tag))
+                .unwrap_or(true)
+        })
+        .collect::<Vec<_>>();
+    dioxus_showcase::core::build_story_navigation(&filtered)
+}
+
+fn showcase_tags() -> Vec<String> {
+    let mut tags = BTreeSet::new();
+    for component in generated::showcase_components() {
+        for tag in component.tags {
+            tags.insert(tag);
+        }
+    }
+    tags.into_iter().collect()
+}
+
+fn node_contains_active_story(
+    node: &dioxus_showcase::core::StoryNavigationNode,
+    active_id: Option<&str>,
+) -> bool {
+    node.story_id.as_deref() == active_id
+        || node.children.iter().any(|child| node_contains_active_story(child, active_id))
+}
+
+#[component]
+fn Sidebar(active_id: Option<String>, show_back_link: bool) -> Element {
+    let components = generated::showcase_components();
+    let mut selected_tag = use_context::<Signal<Option<String>>>();
+    let active_tag = selected_tag.read().clone();
+    let all_tags = showcase_tags();
+    let navigation = showcase_navigation(active_tag.as_deref());
+    let visible_count = components
+        .iter()
+        .filter(|component| {
+            active_tag
+                .as_ref()
+                .map(|tag| component.tags.iter().any(|component_tag| component_tag == tag))
+                .unwrap_or(true)
+        })
+        .count();
+
+    rsx! {
+        aside { class: "sidebar",
+            h1 { "Showcase" }
+            p { class: "muted", "{visible_count} of {components.len()} components" }
+            if show_back_link {
+                Link {
+                    to: Route::Home {},
+                    class: "back-link",
+                    "Back to list"
+                }
+            }
+            div { class: "tag-filter-panel",
+                div { class: "tag-filter-header",
+                    h2 { class: "tag-filter-title", "Tags" }
+                    if let Some(tag) = active_tag.as_ref() {
+                        button {
+                            class: "tag-filter-clear",
+                            onclick: move |_| selected_tag.set(None),
+                            "Clear {tag}"
+                        }
+                    }
+                }
+                if all_tags.is_empty() {
+                    p { class: "muted", "No tags available" }
+                } else {
+                    div { class: "tag-filter-list",
+                        button {
+                            class: if active_tag.is_none() { "tag-filter-chip active" } else { "tag-filter-chip" },
+                            onclick: move |_| selected_tag.set(None),
+                            "All"
+                        }
+                        for tag in all_tags {
+                            {
+                                let is_active = active_tag.as_deref() == Some(tag.as_str());
+                                rsx! {
+                                    button {
+                                        key: "{tag}",
+                                        class: if is_active { "tag-filter-chip active" } else { "tag-filter-chip" },
+                                        onclick: move |_| selected_tag.set(Some(tag.clone())),
+                                        "{tag}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            StoryTree { nodes: navigation, active_id }
+        }
+    }
+}
+
+#[component]
+fn StoryTree(
+    nodes: Vec<dioxus_showcase::core::StoryNavigationNode>,
+    active_id: Option<String>,
+) -> Element {
+    rsx! {
+        ul { class: "component-tree",
+            for node in nodes {
+                StoryTreeNode { node, active_id: active_id.clone() }
+            }
+        }
+    }
+}
+
+#[component]
+fn StoryTreeNode(
+    node: dioxus_showcase::core::StoryNavigationNode,
+    active_id: Option<String>,
+) -> Element {
+    let is_active = node.story_id.as_deref() == active_id.as_deref();
+    let is_open = node_contains_active_story(&node, active_id.as_deref());
+
+    rsx! {
+        li { class: "tree-node",
+            if node.children.is_empty() {
+                if let Some(story_id) = node.story_id.as_ref() {
+                    Link {
+                        to: Route::Component { id: story_id.clone() },
+                        class: if is_active { "tree-leaf-link active" } else { "tree-leaf-link" },
+                        "{node.segment}"
+                    }
+                }
+            } else {
+                details { class: "tree-branch", open: is_open,
+                    summary { class: "tree-summary",
+                        span { class: "tree-summary-label", "{node.segment}" }
+                    }
+                    div { class: "tree-branch-body",
+                        if let Some(story_id) = node.story_id.as_ref() {
+                            Link {
+                                to: Route::Component { id: story_id.clone() },
+                                class: if is_active { "tree-branch-link active" } else { "tree-branch-link" },
+                                "Overview"
+                            }
+                        }
+                        StoryTree { nodes: node.children.clone(), active_id: active_id.clone() }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn Home() -> Element {
+    rsx! {
+        div { class: "shell",
+            Sidebar { active_id: None::<String>, show_back_link: false }
+            main { class: "content",
+                h2 { "Select a component" }
+                p { class: "muted", "Browse the title tree on the left and open any story route." }
+            }
+        }
+    }
+}
+
+#[component]
+fn Component(id: String) -> Element {
+    let components = generated::showcase_components();
+    let selected = components.into_iter().find(|component| component.id == id.as_str());
+    let mut selected_tag = use_context::<Signal<Option<String>>>();
+    let active_tag = selected_tag.read().clone();
+
+    rsx! {
+        div { class: "shell",
+            Sidebar { active_id: Some(id.clone()), show_back_link: true }
+            main { class: "content",
+                if let Some(component) = selected {
+                    h2 { "{component.title}" }
+                    p { class: "muted", "Route: /component/{component.id}" }
+                    if component.tags.is_empty() {
+                        p { class: "muted", "No tags" }
+                    } else {
+                        div { class: "tags",
+                            for tag in component.tags.into_iter() {
+                                {
+                                    let is_active = active_tag.as_deref() == Some(tag.as_str());
+                                    rsx! {
+                                        button {
+                                            key: "{tag}",
+                                            class: if is_active { "tag tag-button active" } else { "tag tag-button" },
+                                            onclick: move |_| selected_tag.set(Some(tag.clone())),
+                                            "{tag}"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    section { class: "canvas",
+                        div { class: "story-surface", {(component.render)()} }
+                    }
+                } else {
+                    h2 { "Component not found" }
+                    p { class: "muted", "No annotated component matched route id '{id}'." }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn NotFound(route: Vec<String>) -> Element {
+    let attempted = if route.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{}", route.join("/"))
+    };
+
+    rsx! {
+        div { class: "shell",
+            main { class: "content",
+                h2 { "Page not found" }
+                p { class: "muted", "Route '{attempted}' does not exist." }
+                Link { to: Route::Home {}, class: "back-link", "Back to home" }
+            }
+        }
+    }
+}
+
+const APP_CSS: &str = r#"
+:root {
+  --bg: #f2f5f8;
+  --panel: #ffffff;
+  --line: #d2d9e4;
+  --text: #0f172a;
+  --muted: #52607a;
+  --accent: #0369a1;
+  --accent-soft: #e0f2fe;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+body { font-family: "Avenir Next", "Segoe UI", sans-serif; }
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+}
+
+.sidebar {
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.content {
+  padding: 20px;
+}
+
+.component-tree {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0 0 0 14px;
+  border-left: 1px solid #d8e4f0;
+  display: grid;
+  gap: 4px;
+}
+
+.back-link {
+  display: block;
+  text-decoration: none;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 10px 12px;
+}
+
+.tag-filter-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f8fd 100%);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.tag-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tag-filter-title {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.tag-filter-clear {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tag-filter-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-filter-chip {
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.tag-filter-chip.active {
+  border-color: #7dd3fc;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tree-node {
+  list-style: none;
+}
+
+.tree-branch {
+  display: block;
+}
+
+.tree-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.tree-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tree-summary::before {
+  content: "▸";
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+
+.tree-summary-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tree-branch[open] > .tree-summary::before {
+  transform: rotate(90deg);
+}
+
+.tree-branch-body {
+  display: grid;
+  gap: 4px;
+}
+
+.tree-leaf-link,
+.tree-branch-link {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.tree-branch-link {
+  color: var(--muted);
+}
+
+.tree-leaf-link.active,
+.tree-branch-link.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar > .component-tree {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.canvas {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.story-surface {
+  position: relative;
+  isolation: isolate;
+  min-height: 240px;
+}
+
+.story-preview {
+  display: grid;
+  gap: 16px;
+}
+
+.story-controls {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8fc 100%);
+  padding: 14px;
+}
+
+.story-controls-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.story-controls-list {
+  display: grid;
+  gap: 12px;
+}
+
+.story-control {
+  display: grid;
+  gap: 6px;
+}
+
+.story-control-checkbox {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.story-control-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.story-control-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.story-control-checkbox-input {
+  width: 16px;
+  height: 16px;
+}
+
+.story-canvas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 24px;
+}
+
+.tags { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.tag {
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 2px 10px;
+  background: #eff6ff;
+}
+
+.tag-button {
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.tag-button.active {
+  border-color: #38bdf8;
+  background: #dbeafe;
+  color: var(--accent);
+}
+
+.muted { color: var(--muted); }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+}
+"#;

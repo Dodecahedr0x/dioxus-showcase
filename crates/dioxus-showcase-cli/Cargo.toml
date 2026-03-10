@@ -1,0 +1,21 @@
+[package]
+name = "dioxus-showcase-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "CLI for developing and validating dioxus-showcase projects."
+
+[[bin]]
+name = "dioxus-showcase"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+dioxus-showcase-core.workspace = true
+handlebars = "6.3"
+serde = { version = "1", features = ["derive"] }
+syn = { workspace = true, features = ["full", "parsing"] }
+
+[lints]
+workspace = true

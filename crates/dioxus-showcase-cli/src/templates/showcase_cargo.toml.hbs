@@ -1,0 +1,10 @@
+[package]
+name = "{{package_name}}"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+dioxus = { version = "0.7", features = ["web", "router"] }
+dioxus-showcase = { path = "../crates/dioxus-showcase" }
+showcase_entry = { package = "{{entry_crate_package_name}}", path = "{{entry_crate_dependency_path}}" }

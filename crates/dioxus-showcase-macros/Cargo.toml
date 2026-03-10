@@ -1,0 +1,23 @@
+[package]
+name = "dioxus-showcase-macros"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Procedural macros for dioxus-showcase."
+
+[lib]
+proc-macro = true
+path = "src/lib.rs"
+
+[dependencies]
+dioxus = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+
+[dev-dependencies]
+dioxus_showcase = { package = "dioxus-showcase", path = "../dioxus-showcase" }
+
+[lints]
+workspace = true
