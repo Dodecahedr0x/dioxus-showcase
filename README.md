@@ -80,3 +80,18 @@ An end-to-end example workspace member is available at:
 - `examples/basic`
 
 It includes `#[showcase_component]` annotations and can be discovered by `dioxus-showcase` when run from the repository root.
+
+## Release flow
+
+Release tags must point at a commit that already contains the target workspace version in `Cargo.toml`.
+
+```bash
+./scripts/set-workspace-version.sh X.Y.Z
+cargo test --workspace --all-targets --all-features
+git add Cargo.toml
+git commit -m "chore(release): bump workspace version to X.Y.Z"
+git tag vX.Y.Z
+git push origin main --follow-tags
+```
+
+The publish workflow verifies that the pushed tag version matches the committed workspace manifest before running `cargo publish`.
