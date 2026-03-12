@@ -31,7 +31,7 @@ pub fn PillButtonControllable(label: String, disabled: bool) -> Element {
 }
 
 /// Story state defined as a plain function with an optional control parameter.
-#[story(component = PillButtonControllable, name = "Primary", tags = ["examples", "workspace"])]
+#[story(title = "PillButtonControllable/Primary", tags = ["examples", "workspace"])]
 pub fn pill_button_primary(label: String) -> Element {
     let label = if label.is_empty() { "Save Changes".to_string() } else { label };
 
@@ -41,7 +41,7 @@ pub fn pill_button_primary(label: String) -> Element {
 }
 
 /// Another fixed story state defined without wrapping it as a component.
-#[story(component = PillButtonControllable, name = "Disabled", tags = ["examples", "workspace"])]
+#[story(title = "PillButtonControllable/Disabled", tags = ["examples", "workspace"])]
 pub fn pill_button_disabled() -> Element {
     rsx! {
         PillButtonControllable { label: "Unavailable".to_string(), disabled: true }

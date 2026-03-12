@@ -270,12 +270,37 @@ fn Component(id: String) -> Element {
                         }
                     }
                     section { class: "canvas",
-                        div { class: "story-surface", {(component.render)()} }
+                        StoryCanvas { component }
                     }
                 } else {
                     h2 { "Component not found" }
                     p { class: "muted", "No annotated component matched route id '{id}'." }
                 }
+            }
+        }
+    }
+}
+
+#[component]
+fn StoryCanvas(component: generated::ShowcaseComponentDefinition) -> Element {
+    rsx! {
+        ErrorBoundary {
+            handle_error: |errors: ErrorContext| {
+                rsx! {
+                    div { class: "story-surface story-surface-error",
+                        h3 { class: "story-error-title", "Story render failed" }
+                        p { class: "muted", "The showcase shell is still running. Fix the story and try again." }
+                        pre { class: "story-error-details", "{errors:?}" }
+                        button {
+                            class: "story-error-retry",
+                            onclick: move |_| errors.clear_errors(),
+                            "Retry story"
+                        }
+                    }
+                }
+            },
+            div { class: "story-surface",
+                {(component.render)()}
             }
         }
     }

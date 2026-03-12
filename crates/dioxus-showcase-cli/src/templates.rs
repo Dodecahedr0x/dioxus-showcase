@@ -291,6 +291,10 @@ mod tests {
         assert!(app.contains("#[route(\"/component/:id\")"));
         assert!(app.contains("#[route(\"/:..route\")"));
         assert!(app.contains("fn Component(id: String) -> Element"));
+        assert!(app.contains("fn StoryCanvas(component: generated::ShowcaseComponentDefinition)"));
+        assert!(app.contains("ErrorBoundary {"));
+        assert!(app.contains("errors.clear_errors()"));
+        assert!(app.contains("Story render failed"));
         assert!(app.contains("enum ThemeMode"));
         assert!(app.contains("\"data-theme\": theme.read().as_str()"));
         assert!(app.contains("class: \"theme-toggle\""));
