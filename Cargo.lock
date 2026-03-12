@@ -184,7 +184,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "basic-example"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "dioxus",
  "dioxus-showcase",
@@ -1027,7 +1027,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-showcase"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -1039,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-showcase-cli"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "clap",
  "dioxus-showcase-core",
@@ -1050,11 +1050,11 @@ dependencies = [
 
 [[package]]
 name = "dioxus-showcase-core"
-version = "0.0.1"
+version = "0.0.2"
 
 [[package]]
 name = "dioxus-showcase-macros"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "dioxus",
  "dioxus-showcase",
