@@ -24,7 +24,7 @@ pub struct ShowcaseBuildConfig {
     pub base_path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ShowcaseConfig {
     pub project: ShowcaseProjectConfig,
@@ -51,16 +51,6 @@ impl Default for ShowcaseDevConfig {
 impl Default for ShowcaseBuildConfig {
     fn default() -> Self {
         Self { out_dir: "target/showcase".to_owned(), base_path: "/".to_owned() }
-    }
-}
-
-impl Default for ShowcaseConfig {
-    fn default() -> Self {
-        Self {
-            project: ShowcaseProjectConfig::default(),
-            dev: ShowcaseDevConfig::default(),
-            build: ShowcaseBuildConfig::default(),
-        }
     }
 }
 
