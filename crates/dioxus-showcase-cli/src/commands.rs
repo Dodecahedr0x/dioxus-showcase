@@ -46,14 +46,10 @@ pub fn cmd_init() -> Result<(), String> {
         .map_err(|err| format!("failed to write DioxusShowcase.toml: {err}"))?;
 
     let app_dir = showcase_app_dir(&config);
-    let created_app = ensure_showcase_app_scaffold(&config)?;
+    ensure_showcase_app_scaffold(&config)?;
 
     println!("Wrote DioxusShowcase.toml.");
-    if created_app {
-        println!("Created showcase app crate at {}", app_dir.display());
-    } else {
-        println!("Showcase app crate already exists at {}", app_dir.display());
-    }
+    println!("Created showcase app crate at {}", app_dir.display());
 
     println!("Run `dioxus-showcase dev` to launch with live updates.");
     Ok(())

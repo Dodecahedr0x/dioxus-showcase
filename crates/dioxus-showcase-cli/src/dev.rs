@@ -6,6 +6,7 @@ use std::{
         Arc,
     },
     thread,
+    time::Duration,
 };
 
 use crate::{
@@ -32,6 +33,9 @@ pub fn cmd_dev() -> Result<(), String> {
     let watcher_stop = Arc::clone(&stop_flag);
     let watcher_config = config.clone();
     let watcher = thread::spawn(move || watch_and_rebuild(watcher_config, watcher_stop));
+
+    // wait for the watcher to start
+    thread::sleep(Duration::from_secs(1));
 
     let status = Command::new("dx")
         .arg("serve")

@@ -42,48 +42,42 @@ pub fn write_artifacts(
     Ok(out_dir)
 }
 
-pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<bool, String> {
+pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<(), String> {
     let app_dir = showcase_app_dir(config);
     let src_dir = app_dir.join("src");
+    let assets_dir = app_dir.join("assets");
     fs::create_dir_all(&src_dir)
         .map_err(|err| format!("failed to create {}: {err}", src_dir.display()))?;
-
-    let mut created = false;
+    fs::create_dir_all(&assets_dir)
+        .map_err(|err| format!("failed to create {}: {err}", assets_dir.display()))?;
 
     let cargo_toml_path = app_dir.join("Cargo.toml");
     let cargo_toml = templates::render_showcase_app_cargo_toml(config)?;
-    let should_write_cargo = !cargo_toml_path.exists();
-    if should_write_cargo {
+    if !cargo_toml_path.exists() {
         fs::write(&cargo_toml_path, cargo_toml)
             .map_err(|err| format!("failed to create {}: {err}", cargo_toml_path.display()))?;
-        created = true;
     }
 
     let dioxus_toml_path = app_dir.join("Dioxus.toml");
-    if !dioxus_toml_path.exists() {
-        let dioxus_toml = templates::render_showcase_app_dioxus_toml(config)?;
-        fs::write(&dioxus_toml_path, dioxus_toml)
-            .map_err(|err| format!("failed to create {}: {err}", dioxus_toml_path.display()))?;
-        created = true;
-    }
+    let dioxus_toml = templates::render_showcase_app_dioxus_toml(config)?;
+    fs::write(&dioxus_toml_path, dioxus_toml)
+        .map_err(|err| format!("failed to create {}: {err}", dioxus_toml_path.display()))?;
 
     let main_rs_path = src_dir.join("main.rs");
-    if !main_rs_path.exists() {
-        let main_rs = templates::render_showcase_app_main_rs(&config.build.base_path, &[])?;
-        fs::write(&main_rs_path, main_rs)
-            .map_err(|err| format!("failed to create {}: {err}", main_rs_path.display()))?;
-        created = true;
-    }
+    let main_rs = templates::render_showcase_app_main_rs(&config.build.base_path, &[])?;
+    fs::write(&main_rs_path, main_rs)
+        .map_err(|err| format!("failed to create {}: {err}", main_rs_path.display()))?;
 
     let generated_rs_path = src_dir.join("generated.rs");
-    if !generated_rs_path.exists() {
-        let generated_rs = templates::render_generated_runtime_rs(&[], "initial")?;
-        fs::write(&generated_rs_path, generated_rs)
-            .map_err(|err| format!("failed to create {}: {err}", generated_rs_path.display()))?;
-        created = true;
-    }
+    let generated_rs = templates::render_generated_runtime_rs(&[], "initial")?;
+    fs::write(&generated_rs_path, generated_rs)
+        .map_err(|err| format!("failed to create {}: {err}", generated_rs_path.display()))?;
 
-    Ok(created)
+    let showcase_css_path = assets_dir.join("showcase.css");
+    fs::write(&showcase_css_path, templates::render_showcase_app_css())
+        .map_err(|err| format!("failed to create {}: {err}", showcase_css_path.display()))?;
+
+    Ok(())
 }
 
 fn sync_entry_assets_and_collect_stylesheets(
@@ -92,11 +86,15 @@ fn sync_entry_assets_and_collect_stylesheets(
     let entry_assets_dir = Path::new(&config.project.entry_crate).join("assets");
     let showcase_assets_dir = showcase_app_dir(config).join("assets");
 
-    if !entry_assets_dir.exists() {
-        return Ok(Vec::new());
-    }
+    fs::create_dir_all(&showcase_assets_dir)
+        .map_err(|err| format!("failed to create {}: {err}", showcase_assets_dir.display()))?;
+    let showcase_css_path = showcase_assets_dir.join("showcase.css");
+    fs::write(&showcase_css_path, templates::render_showcase_app_css())
+        .map_err(|err| format!("failed to create {}: {err}", showcase_css_path.display()))?;
 
-    copy_dir_recursive(&entry_assets_dir, &showcase_assets_dir)?;
+    if entry_assets_dir.exists() {
+        copy_dir_recursive(&entry_assets_dir, &showcase_assets_dir)?;
+    }
 
     let mut stylesheets = Vec::new();
     collect_stylesheets(&showcase_assets_dir, &showcase_assets_dir, &mut stylesheets)?;
@@ -257,9 +255,12 @@ mod tests {
         let updated_main = std::fs::read_to_string(&main_rs_path).expect("read updated main");
         assert!(updated_main.contains("fn Sidebar"));
         assert!(updated_main.contains("asset!(\"/assets/app.css\")"));
+        assert!(updated_main.contains("asset!(\"/assets/showcase.css\")"));
         assert!(updated_main.contains("asset!(\"/assets/styles/tailwind.css\")"));
+        assert!(!updated_main.contains("APP_CSS"));
         assert!(!updated_main.contains("stale main"));
         assert!(showcase_dir.join("assets/app.css").exists());
+        assert!(showcase_dir.join("assets/showcase.css").exists());
         assert!(showcase_dir.join("assets/styles/tailwind.css").exists());
 
         let _ = std::fs::remove_dir_all(&dir);

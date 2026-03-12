@@ -121,18 +121,23 @@ fn derive_story_title(
     story_meta: &crate::utils::ShowcaseMeta,
     fallback_story_name: &str,
 ) -> Result<String, String> {
+    if story_meta.component.is_some() {
+        return Err("#[story(...)] no longer accepts component = ...; use title = \"...\" instead"
+            .to_owned());
+    }
+
+    if story_meta.name.is_some() {
+        return Err(
+            "#[story(...)] no longer accepts name = ...; include the full story path in title = \"...\""
+                .to_owned(),
+        );
+    }
+
     if let Some(title) = &story_meta.title {
         return Ok(title.clone());
     }
 
-    match (&story_meta.component, &story_meta.name) {
-        (Some(component), Some(name)) => Ok(format!("{component}/{name}")),
-        (Some(_), None) => {
-            Err("#[story(component = ComponentName)] also requires name = \"...\"".to_owned())
-        }
-        (None, Some(_)) => Err("#[story(name = ...)] also requires component = \"...\"".to_owned()),
-        (None, None) => Ok(fallback_story_name.to_owned()),
-    }
+    Ok(fallback_story_name.to_owned())
 }
 
 #[cfg(test)]
@@ -143,7 +148,7 @@ mod tests {
     #[test]
     fn zero_arg_story_renders_inside_story_frame() {
         let expanded = expand(
-            quote! { component = button_component, name = "Default" },
+            quote! { title = "Atoms/Button/Default" },
             quote! {
                 fn button_default() -> &'static str {
                     "ok"

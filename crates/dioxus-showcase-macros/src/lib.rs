@@ -22,7 +22,7 @@ use proc_macro::TokenStream;
 /// use dioxus::prelude::*;
 /// use dioxus_showcase::prelude::*;
 ///
-/// #[story(component = Button, name = "Primary")]
+/// #[story(title = "Atoms/Button/Primary")]
 /// fn button_primary() -> Element {
 ///     rsx! { button { "Save" } }
 /// }
@@ -30,8 +30,6 @@ use proc_macro::TokenStream;
 ///
 /// Supported arguments:
 /// - `title = "..."`
-/// - `component = ComponentName`
-/// - `name = "..."`
 /// - `tags = ["...", "..."]`
 #[proc_macro_attribute]
 pub fn story(attr: TokenStream, item: TokenStream) -> TokenStream {

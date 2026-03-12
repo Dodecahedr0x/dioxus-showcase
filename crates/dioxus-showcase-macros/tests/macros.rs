@@ -30,7 +30,7 @@ impl StoryPropsTrait for ButtonNamedProps {
     }
 }
 
-#[story(component = button_component, name = "Default")]
+#[story(title = "Atoms/Button/Default")]
 fn button_default() -> &'static str {
     "ok"
 }
@@ -40,7 +40,7 @@ fn button_explicit_title() -> &'static str {
     "explicit"
 }
 
-#[story(component = button_component, name = "Controlled")]
+#[story(title = "Atoms/Button/Controlled")]
 fn button_controlled_story(label: String, disabled: bool) -> Element {
     rsx! {
         button { disabled, "{label}" }
@@ -93,8 +93,8 @@ fn story_attribute_generates_story_metadata() {
     let generated =
         __dioxus_showcase_story__button_default("src/macros.rs", "macros::button_default");
     assert_eq!(generated.len(), 1);
-    assert_eq!(generated[0].definition.id, "button-component-default");
-    assert_eq!(generated[0].definition.title, "button_component/Default");
+    assert_eq!(generated[0].definition.id, "atoms-button-default");
+    assert_eq!(generated[0].definition.title, "Atoms/Button/Default");
     assert_eq!(generated[0].definition.renderer_symbol, "__dioxus_showcase_render__button_default");
 }
 
@@ -118,8 +118,8 @@ fn story_attribute_supports_controlled_parameters() {
     );
 
     assert_eq!(generated.len(), 1);
-    assert_eq!(generated[0].definition.id, "button-component-controlled");
-    assert_eq!(generated[0].definition.title, "button_component/Controlled");
+    assert_eq!(generated[0].definition.id, "atoms-button-controlled");
+    assert_eq!(generated[0].definition.title, "Atoms/Button/Controlled");
 }
 
 #[test]

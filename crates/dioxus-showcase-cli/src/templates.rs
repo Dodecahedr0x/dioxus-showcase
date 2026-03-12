@@ -11,6 +11,7 @@ const GENERATED_RUNTIME_TEMPLATE: &str = include_str!("templates/generated_runti
 const SHOWCASE_MAIN_TEMPLATE: &str = include_str!("templates/showcase_main.rs.hbs");
 const SHOWCASE_CARGO_TEMPLATE: &str = include_str!("templates/showcase_cargo.toml.hbs");
 const SHOWCASE_DIOXUS_TEMPLATE: &str = include_str!("templates/showcase_dioxus.toml.hbs");
+const SHOWCASE_APP_CSS_TEMPLATE: &str = include_str!("templates/showcase_app.css");
 
 #[derive(Serialize)]
 struct RuntimeContext {
@@ -44,7 +45,6 @@ struct MainTemplateContext {
     route_component: String,
     route_component_prefix: String,
     route_not_found: String,
-    route_prefix: String,
     stylesheets: Vec<String>,
 }
 
@@ -73,26 +73,17 @@ pub fn render_generated_runtime_rs(
 }
 
 pub fn render_showcase_app_main_rs(
-    base_path: &str,
+    _base_path: &str,
     stylesheets: &[String],
 ) -> Result<String, String> {
-    let route_prefix = normalize_base_path(base_path);
     render_template(
         SHOWCASE_MAIN_TEMPLATE,
         &MainTemplateContext {
-            route_root: route_pattern(&route_prefix, ""),
-            route_component: route_pattern(&route_prefix, "/component/:id"),
-            route_component_prefix: route_pattern(&route_prefix, "/component/"),
-            route_not_found: route_pattern(&route_prefix, "/:..route"),
-            route_prefix: if route_prefix.is_empty() {
-                "/".to_owned()
-            } else {
-                route_prefix.clone()
-            },
-            stylesheets: stylesheets
-                .iter()
-                .map(|sheet| join_url_path(&route_prefix, sheet))
-                .collect(),
+            route_root: "/".to_owned(),
+            route_component: "/component/:id".to_owned(),
+            route_component_prefix: "/component/".to_owned(),
+            route_not_found: "/:..route".to_owned(),
+            stylesheets: stylesheets.to_vec(),
         },
     )
 }
@@ -119,6 +110,10 @@ pub fn render_showcase_app_cargo_toml(config: &ShowcaseConfig) -> Result<String,
 pub fn render_showcase_app_dioxus_toml(config: &ShowcaseConfig) -> Result<String, String> {
     let app_name = escape_toml_string(&format!("{} showcase", config.project.name));
     render_template(SHOWCASE_DIOXUS_TEMPLATE, &DioxusTemplateContext { app_name })
+}
+
+pub fn render_showcase_app_css() -> &'static str {
+    SHOWCASE_APP_CSS_TEMPLATE
 }
 
 fn render_template<T: Serialize>(template: &str, context: &T) -> Result<String, String> {
@@ -212,39 +207,6 @@ fn showcase_app_dir(config: &ShowcaseConfig) -> PathBuf {
     PathBuf::from(&config.project.showcase_crate)
 }
 
-fn normalize_base_path(base_path: &str) -> String {
-    let trimmed = base_path.trim();
-    if trimmed.is_empty() || trimmed == "/" {
-        return String::new();
-    }
-
-    let trimmed = trimmed.trim_matches('/');
-    format!("/{trimmed}")
-}
-
-fn route_pattern(prefix: &str, suffix: &str) -> String {
-    if prefix.is_empty() {
-        if suffix.is_empty() {
-            "/".to_owned()
-        } else {
-            suffix.to_owned()
-        }
-    } else if suffix.is_empty() {
-        prefix.to_owned()
-    } else {
-        format!("{prefix}{suffix}")
-    }
-}
-
-fn join_url_path(prefix: &str, path: &str) -> String {
-    if prefix.is_empty() {
-        return path.to_owned();
-    }
-
-    let suffix = path.strip_prefix('/').unwrap_or(path);
-    format!("{prefix}/{suffix}")
-}
-
 fn escape_toml_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -329,27 +291,31 @@ mod tests {
         assert!(app.contains("#[route(\"/component/:id\")"));
         assert!(app.contains("#[route(\"/:..route\")"));
         assert!(app.contains("fn Component(id: String) -> Element"));
+        assert!(app.contains("enum ThemeMode"));
+        assert!(app.contains("\"data-theme\": theme.read().as_str()"));
+        assert!(app.contains("class: \"theme-toggle\""));
+        assert!(app.contains("class: \"theme-toggle-track\""));
+        assert!(!app.contains("Back to list"));
+        assert!(!app.contains("components\" }"));
         assert!(app.contains("document::Stylesheet { href: asset!(\"/assets/app.css\") }"));
         assert!(
             app.contains("document::Stylesheet { href: asset!(\"/assets/styles/tailwind.css\") }")
         );
-        assert!(app.contains("const ROUTE_PREFIX: &str = \"/\";"));
     }
 
     #[test]
-    fn showcase_main_honors_base_path() {
+    fn showcase_main_ignores_base_path_for_routes() {
         let app = render_showcase_app_main_rs(
             "/showcase/",
             &["/assets/app.css".to_owned(), "/assets/styles/tailwind.css".to_owned()],
         )
         .expect("render app");
-        assert!(app.contains("#[route(\"/showcase\")"));
-        assert!(app.contains("#[route(\"/showcase/component/:id\")"));
-        assert!(app.contains("#[route(\"/showcase/:..route\")"));
-        assert!(app.contains("document::Stylesheet { href: asset!(\"/showcase/assets/app.css\") }"));
-        assert!(app.contains(
-            "document::Stylesheet { href: asset!(\"/showcase/assets/styles/tailwind.css\") }"
-        ));
-        assert!(app.contains("const ROUTE_PREFIX: &str = \"/showcase\";"));
+        assert!(app.contains("#[route(\"/\")"));
+        assert!(app.contains("#[route(\"/component/:id\")"));
+        assert!(app.contains("#[route(\"/:..route\")"));
+        assert!(app.contains("document::Stylesheet { href: asset!(\"/assets/app.css\") }"));
+        assert!(
+            app.contains("document::Stylesheet { href: asset!(\"/assets/styles/tailwind.css\") }")
+        );
     }
 }

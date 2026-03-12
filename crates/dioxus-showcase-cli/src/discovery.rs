@@ -304,6 +304,11 @@ fn parse_showcase_component_attribute(
             }
 
             if meta.path.is_ident("component") {
+                if is_story {
+                    return Err(meta.error(
+                        "story attributes no longer accept component = ...; use title = \"...\"",
+                    ));
+                }
                 let value: syn::ExprPath = meta.value()?.parse()?;
                 component = Some(
                     component_name_from_path(&value)
@@ -313,6 +318,11 @@ fn parse_showcase_component_attribute(
             }
 
             if meta.path.is_ident("name") {
+                if is_story {
+                    return Err(meta.error(
+                        "story attributes no longer accept name = ...; include the full path in title = \"...\"",
+                    ));
+                }
                 let value: syn::LitStr = meta.value()?.parse()?;
                 name = Some(value.value());
                 return Ok(());
@@ -327,28 +337,7 @@ fn parse_showcase_component_attribute(
         })
         .map_err(|err| format!("invalid showcase attribute in {}: {err}", path.display()))?;
 
-    let title = if let Some(title) = title {
-        Some(title)
-    } else if is_story {
-        match (component, name) {
-            (Some(component), Some(name)) => Some(format!("{component}/{name}")),
-            (Some(_), None) => {
-                return Err(format!(
-                    "invalid story attribute in {}: component requires name",
-                    path.display()
-                ));
-            }
-            (None, Some(_)) => {
-                return Err(format!(
-                    "invalid story attribute in {}: name requires component",
-                    path.display()
-                ));
-            }
-            (None, None) => None,
-        }
-    } else {
-        None
-    };
+    let title = title;
 
     Ok(ShowcaseAttrMeta { title, tags })
 }
@@ -620,7 +609,7 @@ fn Badge() -> Element { todo!() }
         std::fs::write(
             &path,
             r#"
-#[story(component = Button, name = "Primary", tags = ["atoms", "button"])]
+#[story(title = "Button/Primary", tags = ["atoms", "button"])]
 fn button_primary() -> Element { todo!() }
 "#,
         )
