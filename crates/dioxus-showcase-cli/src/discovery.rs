@@ -24,8 +24,12 @@ pub fn discover_component_source_files(
 ) -> Result<Vec<PathBuf>, String> {
     let entry_src_dir = entry_crate_src_dir(root, config)?;
     let mut files = Vec::new();
-    let showcase_dir = root.join(&config.project.showcase_crate);
-    collect_rs_files(&entry_src_dir, &showcase_dir, &mut files)?;
+    let mut visited = std::collections::BTreeSet::new();
+
+    for crate_root in discover_crate_root_files(&entry_src_dir) {
+        collect_reachable_rust_files(&crate_root, &mut visited, &mut files)?;
+    }
+
     Ok(files)
 }
 
@@ -62,32 +66,41 @@ fn entry_crate_src_dir(root: &Path, config: &ShowcaseConfig) -> Result<PathBuf, 
     Ok(src_dir)
 }
 
-fn collect_rs_files(
-    dir: &Path,
-    showcase_dir: &Path,
+fn discover_crate_root_files(entry_src_dir: &Path) -> Vec<PathBuf> {
+    ["lib.rs", "main.rs"]
+        .into_iter()
+        .map(|name| entry_src_dir.join(name))
+        .filter(|path| path.exists())
+        .collect()
+}
+
+fn collect_reachable_rust_files(
+    path: &Path,
+    visited: &mut std::collections::BTreeSet<PathBuf>,
     files: &mut Vec<PathBuf>,
 ) -> Result<(), String> {
-    let entries =
-        fs::read_dir(dir).map_err(|err| format!("failed to read {}: {err}", dir.display()))?;
-    for entry in entries {
-        let entry = entry.map_err(|err| format!("failed to read directory entry: {err}"))?;
-        let path = entry.path();
-        if path.is_dir() {
-            if path == showcase_dir
-                || path.components().any(|part| part.as_os_str() == "target")
-                || path.components().any(|part| part.as_os_str() == ".git")
-                || path.components().any(|part| part.as_os_str() == "tests")
-            {
-                continue;
-            }
-            collect_rs_files(&path, showcase_dir, files)?;
-            continue;
-        }
-
-        if is_rust_source_file(&path) {
-            files.push(path);
-        }
+    let canonical = path
+        .canonicalize()
+        .map_err(|err| format!("failed to canonicalize {}: {err}", path.display()))?;
+    if !visited.insert(canonical) {
+        return Ok(());
     }
+
+    if !is_rust_source_file(path) {
+        return Ok(());
+    }
+
+    files.push(path.to_path_buf());
+
+    let source = fs::read_to_string(path)
+        .map_err(|err| format!("failed to read source file {}: {err}", path.display()))?;
+    let file = syn::parse_file(&source)
+        .map_err(|err| format!("failed to parse Rust source {}: {err}", path.display()))?;
+
+    for nested_path in discover_external_module_files(path, &file.items)? {
+        collect_reachable_rust_files(&nested_path, visited, files)?;
+    }
+
     Ok(())
 }
 
@@ -108,6 +121,24 @@ fn discover_components_in_file(
     let mut stories = Vec::new();
     collect_stories_from_items(entry_src_dir, path, &source_path, &[], &file.items, &mut stories)?;
     Ok(stories)
+}
+
+fn discover_external_module_files(path: &Path, items: &[Item]) -> Result<Vec<PathBuf>, String> {
+    let mut files = Vec::new();
+
+    for item in items {
+        let Item::Mod(item_mod) = item else {
+            continue;
+        };
+        if item_mod.content.is_some() {
+            continue;
+        }
+
+        let nested = resolve_external_module_path(path, item_mod)?;
+        files.push(nested);
+    }
+
+    Ok(files)
 }
 
 fn collect_stories_from_items(
@@ -173,6 +204,80 @@ fn find_story_attribute(attrs: &[Attribute]) -> Option<&Attribute> {
             .last()
             .is_some_and(|segment| segment.ident == "showcase" || segment.ident == "story")
     })
+}
+
+fn resolve_external_module_path(
+    current_file: &Path,
+    item_mod: &syn::ItemMod,
+) -> Result<PathBuf, String> {
+    if let Some(path_override) = module_path_override(&item_mod.attrs)? {
+        let resolved = current_file.parent().unwrap_or_else(|| Path::new("")).join(path_override);
+        if resolved.exists() {
+            return Ok(resolved);
+        }
+
+        return Err(format!(
+            "module '{}' declared in {} points to missing path {}",
+            item_mod.ident,
+            current_file.display(),
+            resolved.display()
+        ));
+    }
+
+    let module_name = item_mod.ident.to_string();
+    let search_root = external_module_search_dir(current_file)?;
+    let file_candidate = search_root.join(format!("{module_name}.rs"));
+    if file_candidate.exists() {
+        return Ok(file_candidate);
+    }
+
+    let mod_candidate = search_root.join(&module_name).join("mod.rs");
+    if mod_candidate.exists() {
+        return Ok(mod_candidate);
+    }
+
+    Err(format!(
+        "failed to resolve module '{}' declared in {}",
+        module_name,
+        current_file.display()
+    ))
+}
+
+fn external_module_search_dir(current_file: &Path) -> Result<PathBuf, String> {
+    let parent = current_file.parent().ok_or_else(|| {
+        format!("failed to resolve parent directory for module source {}", current_file.display())
+    })?;
+    let stem = current_file
+        .file_stem()
+        .and_then(std::ffi::OsStr::to_str)
+        .ok_or_else(|| format!("failed to derive module stem from {}", current_file.display()))?;
+
+    Ok(match stem {
+        "lib" | "main" | "mod" => parent.to_path_buf(),
+        other => parent.join(other),
+    })
+}
+
+fn module_path_override(attrs: &[Attribute]) -> Result<Option<String>, String> {
+    for attr in attrs {
+        if !attr.path().is_ident("path") {
+            continue;
+        }
+
+        let meta = &attr.meta;
+        let syn::Meta::NameValue(named) = meta else {
+            return Err("invalid #[path = ...] attribute: expected name-value syntax".to_owned());
+        };
+        let syn::Expr::Lit(expr_lit) = &named.value else {
+            return Err("invalid #[path = ...] attribute: expected string literal".to_owned());
+        };
+        let syn::Lit::Str(value) = &expr_lit.lit else {
+            return Err("invalid #[path = ...] attribute: expected string literal".to_owned());
+        };
+        return Ok(Some(value.value()));
+    }
+
+    Ok(None)
 }
 
 struct ShowcaseAttrMeta {
@@ -541,6 +646,13 @@ fn button_primary() -> Element { todo!() }
         std::fs::create_dir_all(&include_dir).expect("create include dir");
         std::fs::create_dir_all(&showcase_dir).expect("create showcase dir");
         std::fs::create_dir_all(&skip_dir).expect("create target dir");
+        std::fs::write(
+            include_dir.join("lib.rs"),
+            r#"
+mod ok;
+"#,
+        )
+        .expect("write lib.rs");
 
         std::fs::write(
             include_dir.join("ok.rs"),
@@ -572,6 +684,88 @@ fn ignored_component() -> Element { todo!() }
         let stories = discover_components(&dir, &config).expect("discover components");
         assert_eq!(stories.len(), 1);
         assert_eq!(stories[0].title, "Included/Component");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn discover_components_follows_external_module_graph_only() {
+        let dir = temp_dir("dioxus-showcase-discover-module-graph");
+        let src_dir = dir.join("crate").join("src");
+        std::fs::create_dir_all(src_dir.join("components")).expect("create src tree");
+
+        std::fs::write(
+            src_dir.join("lib.rs"),
+            r#"
+mod components;
+"#,
+        )
+        .expect("write lib.rs");
+        std::fs::write(
+            src_dir.join("components.rs"),
+            r#"
+pub mod button;
+"#,
+        )
+        .expect("write components.rs");
+        std::fs::write(
+            src_dir.join("components").join("button.rs"),
+            r#"
+#[showcase(title = "Atoms/Button")]
+fn Button() -> Element { todo!() }
+"#,
+        )
+        .expect("write reachable module");
+        std::fs::write(
+            src_dir.join("orphan.rs"),
+            r#"
+#[showcase(title = "Ignored/Orphan")]
+fn Orphan() -> Element { todo!() }
+"#,
+        )
+        .expect("write orphan module");
+
+        let mut config = ShowcaseConfig::default();
+        config.project.entry_crate = "crate".to_owned();
+        let stories = discover_components(&dir, &config).expect("discover components");
+
+        assert_eq!(stories.len(), 1);
+        assert_eq!(stories[0].title, "Atoms/Button");
+        assert_eq!(stories[0].module_path, "components::button::Button");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn discover_component_source_files_supports_path_attribute() {
+        let dir = temp_dir("dioxus-showcase-discover-path-attr");
+        let src_dir = dir.join("crate").join("src");
+        std::fs::create_dir_all(src_dir.join("alt")).expect("create alt dir");
+
+        std::fs::write(
+            src_dir.join("lib.rs"),
+            r#"
+#[path = "alt/custom_button.rs"]
+mod custom_button;
+"#,
+        )
+        .expect("write lib.rs");
+        std::fs::write(
+            src_dir.join("alt").join("custom_button.rs"),
+            r#"
+#[showcase(title = "Atoms/Custom Button")]
+fn CustomButton() -> Element { todo!() }
+"#,
+        )
+        .expect("write custom module");
+
+        let mut config = ShowcaseConfig::default();
+        config.project.entry_crate = "crate".to_owned();
+        let files = discover_component_source_files(&dir, &config).expect("discover files");
+
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|path| path.ends_with("lib.rs")));
+        assert!(files.iter().any(|path| path.ends_with("alt/custom_button.rs")));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
