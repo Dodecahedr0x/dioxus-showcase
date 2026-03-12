@@ -22,7 +22,10 @@ dioxus-showcase-macros = { version = "0.0.2", path = "crates/dioxus-showcase-mac
 dioxus-showcase = { version = "0.0.2", path = "crates/dioxus-showcase" }
 proc-macro2 = "1.0"
 quote = "1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 syn = "2.0"
+toml = "0.8"
 
 [workspace.lints.clippy]
 all = "warn"

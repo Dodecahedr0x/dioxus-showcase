@@ -10,5 +10,10 @@ description = "Core data model and shared types for dioxus-showcase."
 name = "dioxus_showcase_core"
 path = "src/lib.rs"
 
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+
 [lints]
 workspace = true

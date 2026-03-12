@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoryDefinition {
     pub id: String,
     pub title: String,
@@ -8,7 +10,7 @@ pub struct StoryDefinition {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct StoryManifest {
     pub schema_version: u32,
     pub stories: Vec<StoryDefinition>,
@@ -24,34 +26,8 @@ impl StoryManifest {
     }
 
     pub fn to_json(&self) -> String {
-        let stories_json = self
-            .stories
-            .iter()
-            .map(|story| {
-                format!(
-                    "{{\"id\":\"{}\",\"title\":\"{}\",\"source_path\":\"{}\",\"module_path\":\"{}\",\"renderer_symbol\":\"{}\",\"tags\":[{}]}}",
-                    escape_json(&story.id),
-                    escape_json(&story.title),
-                    escape_json(&story.source_path),
-                    escape_json(&story.module_path),
-                    escape_json(&story.renderer_symbol),
-                    story
-                        .tags
-                        .iter()
-                        .map(|tag| format!("\"{}\"", escape_json(tag)))
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",");
-
-        format!("{{\"schema_version\":{},\"stories\":[{}]}}", self.schema_version, stories_json)
+        serde_json::to_string(self).expect("story manifest serialization should not fail")
     }
-}
-
-fn escape_json(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
 }
 
 #[cfg(test)]
@@ -71,10 +47,8 @@ mod tests {
         });
 
         let json = manifest.to_json();
-        assert_eq!(
-            json,
-            "{\"schema_version\":1,\"stories\":[{\"id\":\"atoms-button\",\"title\":\"Atoms \\\"Button\\\"\",\"source_path\":\"showcase\\\\button.stories.rs\",\"module_path\":\"showcase\\\\button\\nstories.rs::button_default\",\"renderer_symbol\":\"button_default\",\"tags\":[\"atoms\",\"primary\\\"cta\"]}]}"
-        );
+        let decoded: StoryManifest = serde_json::from_str(&json).expect("valid json");
+        assert_eq!(decoded, manifest);
     }
 
     #[test]
@@ -82,5 +56,23 @@ mod tests {
         let manifest = StoryManifest::new(3);
         assert_eq!(manifest.schema_version, 3);
         assert!(manifest.stories.is_empty());
+    }
+
+    #[test]
+    fn manifest_round_trips_through_json() {
+        let mut manifest = StoryManifest::new(2);
+        manifest.add_story(StoryDefinition {
+            id: "atoms-button".to_owned(),
+            title: "Atoms/Button".to_owned(),
+            source_path: "src/button.rs".to_owned(),
+            module_path: "button::Button".to_owned(),
+            renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
+            tags: vec!["atoms".to_owned()],
+        });
+
+        let json = manifest.to_json();
+        let decoded: StoryManifest = serde_json::from_str(&json).expect("valid json");
+
+        assert_eq!(decoded, manifest);
     }
 }
