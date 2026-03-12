@@ -19,13 +19,16 @@ impl dioxus_showcase::core::StoryTreeEntry for generated::ShowcaseComponentDefin
 
 #[derive(Routable, Clone, PartialEq, Debug)]
 enum Route {
-    #[route("/")]
+    #[route("{{route_root}}")]
     Home {},
-    #[route("/component/:id")]
+    #[route("{{route_component}}")]
     Component { id: String },
-    #[route("/:..route")]
+    #[route("{{route_not_found}}")]
     NotFound { route: Vec<String> },
 }
+
+const ROUTE_PREFIX: &str = "{{route_prefix}}";
+const COMPONENT_ROUTE_PREFIX: &str = "{{route_component_prefix}}";
 
 #[component]
 fn App() -> Element {
@@ -221,7 +224,7 @@ fn Component(id: String) -> Element {
             main { class: "content",
                 if let Some(component) = selected {
                     h2 { "{component.title}" }
-                    p { class: "muted", "Route: /component/{component.id}" }
+                    p { class: "muted", "Route: {COMPONENT_ROUTE_PREFIX}{component.id}" }
                     if component.tags.is_empty() {
                         p { class: "muted", "No tags" }
                     } else {

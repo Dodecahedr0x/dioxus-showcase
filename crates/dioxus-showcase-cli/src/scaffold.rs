@@ -30,7 +30,7 @@ pub fn write_artifacts(
     ensure_showcase_app_scaffold(config)?;
     let stylesheets = sync_entry_assets_and_collect_stylesheets(config)?;
     let main_path = showcase_app_dir(config).join("src/main.rs");
-    let main_rs = templates::render_showcase_app_main_rs(&stylesheets)?;
+    let main_rs = templates::render_showcase_app_main_rs(&config.build.base_path, &stylesheets)?;
     fs::write(&main_path, main_rs)
         .map_err(|err| format!("failed to create {}: {err}", main_path.display()))?;
 
@@ -74,7 +74,7 @@ pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<bool, Str
 
     let main_rs_path = src_dir.join("main.rs");
     if !main_rs_path.exists() {
-        let main_rs = templates::render_showcase_app_main_rs(&[])?;
+        let main_rs = templates::render_showcase_app_main_rs(&config.build.base_path, &[])?;
         fs::write(&main_rs_path, main_rs)
             .map_err(|err| format!("failed to create {}: {err}", main_rs_path.display()))?;
         created = true;
