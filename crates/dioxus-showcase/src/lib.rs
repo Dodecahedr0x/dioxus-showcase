@@ -1,6 +1,5 @@
 //! Public facade crate for dioxus-showcase.
-use dioxus::prelude::Element;
-use dioxus_core::{Callback, EventHandler};
+use dioxus::prelude::*;
 use dioxus_showcase_core::StoryDefinition;
 
 pub mod prelude {
@@ -113,7 +112,7 @@ impl<T> StoryArg for Vec<T> {
 
 impl StoryArg for Element {
     fn story_arg() -> Self {
-        ::dioxus::prelude::rsx! {
+        rsx! {
             div { "Story content" }
         }
     }

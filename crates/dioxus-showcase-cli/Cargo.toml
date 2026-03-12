@@ -13,8 +13,8 @@ path = "src/main.rs"
 [dependencies]
 clap.workspace = true
 dioxus-showcase-core.workspace = true
-handlebars = "6.3"
-serde = { version = "1", features = ["derive"] }
+handlebars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 syn = { workspace = true, features = ["full", "parsing"] }
 
 [lints]

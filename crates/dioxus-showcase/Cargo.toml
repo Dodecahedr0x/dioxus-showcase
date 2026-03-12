@@ -12,9 +12,6 @@ path = "src/lib.rs"
 
 [dependencies]
 dioxus = { workspace = true }
-dioxus-core = "0.7"
-dioxus-signals = "0.7"
-dioxus_elements = { package = "dioxus-html", version = "0.7" }
 dioxus-showcase-core = { workspace = true }
 dioxus-showcase-macros = { workspace = true }
 
