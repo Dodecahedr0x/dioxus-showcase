@@ -34,12 +34,23 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Validate publish build
-        run: cargo publish --workspace --dry-run
+        run: |
+          cargo publish -p dioxus-showcase-core --dry-run
+          cargo publish -p dioxus-showcase-macros --dry-run
+          cargo publish -p dioxus-showcase --dry-run
+          cargo publish -p dioxus-showcase-cli --dry-run
 
       - name: Publish crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --workspace
+        run: |
+          cargo publish -p dioxus-showcase-core
+          sleep 20
+          cargo publish -p dioxus-showcase-macros
+          sleep 20
+          cargo publish -p dioxus-showcase
+          sleep 20
+          cargo publish -p dioxus-showcase-cli
 
   sync-workspace-version:
     needs: publish

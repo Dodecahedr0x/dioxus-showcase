@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use dioxus_showcase_core::{ShowcaseConfig, StoryDefinition, StoryManifest};
 
@@ -35,11 +34,7 @@ pub fn write_artifacts(
         .map_err(|err| format!("failed to create {}: {err}", main_path.display()))?;
 
     let generated_path = showcase_app_dir(config).join("src/generated.rs");
-    let generation = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| format!("system clock error while generating showcase runtime: {err}"))?
-        .as_nanos()
-        .to_string();
+    let generation = stable_generation_token(stories);
     let generated_runtime = templates::render_generated_runtime_rs(stories, &generation)?;
     fs::write(&generated_path, generated_runtime)
         .map_err(|err| format!("failed to create {}: {err}", generated_path.display()))?;
@@ -107,6 +102,21 @@ fn sync_entry_assets_and_collect_stylesheets(
     collect_stylesheets(&showcase_assets_dir, &showcase_assets_dir, &mut stylesheets)?;
     stylesheets.sort();
     Ok(stylesheets)
+}
+
+fn stable_generation_token(stories: &[StoryDefinition]) -> String {
+    let mut manifest = StoryManifest::new(1);
+    for story in stories {
+        manifest.add_story(story.clone());
+    }
+
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in manifest.to_json().bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+
+    format!("manifest-{hash:016x}")
 }
 
 fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), String> {
@@ -189,7 +199,7 @@ mod tests {
 
     use dioxus_showcase_core::{ShowcaseConfig, StoryDefinition};
 
-    use super::write_artifacts;
+    use super::{stable_generation_token, write_artifacts};
 
     fn temp_dir(prefix: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -250,5 +260,23 @@ mod tests {
         assert!(showcase_dir.join("assets/styles/tailwind.css").exists());
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stable_generation_token_is_deterministic() {
+        let stories = vec![StoryDefinition {
+            id: "atoms-button".to_owned(),
+            title: "Atoms/Button".to_owned(),
+            source_path: "src/button.rs".to_owned(),
+            module_path: "button::Button".to_owned(),
+            renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
+            tags: vec!["atoms".to_owned()],
+        }];
+
+        let first = stable_generation_token(&stories);
+        let second = stable_generation_token(&stories);
+
+        assert_eq!(first, second);
+        assert!(first.starts_with("manifest-"));
     }
 }
