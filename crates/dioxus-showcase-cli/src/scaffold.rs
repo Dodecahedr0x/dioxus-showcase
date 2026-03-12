@@ -201,6 +201,9 @@ mod tests {
 
     use super::{stable_generation_token, write_artifacts};
 
+    const GOLDEN_MANIFEST: &str = include_str!("testdata/build_golden_manifest.json");
+    const GOLDEN_GENERATED_RS: &str = include_str!("testdata/build_golden_generated.rs");
+
     fn temp_dir(prefix: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -258,6 +261,60 @@ mod tests {
         assert!(!updated_main.contains("stale main"));
         assert!(showcase_dir.join("assets/app.css").exists());
         assert!(showcase_dir.join("assets/styles/tailwind.css").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_artifacts_matches_golden_outputs_and_is_stable() {
+        let dir = temp_dir("dioxus-showcase-build-golden");
+        let entry_dir = dir.join("web");
+        let showcase_dir = dir.join("showcase");
+        std::fs::create_dir_all(entry_dir.join("src")).expect("create entry src");
+        std::fs::create_dir_all(&showcase_dir).expect("create showcase dir");
+        std::fs::write(
+            entry_dir.join("Cargo.toml"),
+            "[package]\nname = \"web\"\nversion = \"0.1.0\"\n",
+        )
+        .expect("write entry cargo");
+
+        let mut config = ShowcaseConfig::default();
+        config.project.entry_crate = entry_dir.to_string_lossy().to_string();
+        config.project.showcase_crate = showcase_dir.to_string_lossy().to_string();
+        config.build.out_dir = dir.join("target/showcase").to_string_lossy().to_string();
+
+        let stories = vec![StoryDefinition {
+            id: "atoms-button".to_owned(),
+            title: "Atoms/Button".to_owned(),
+            source_path: "/workspace/src/button.rs".to_owned(),
+            module_path: "button_variants::Button".to_owned(),
+            renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
+            tags: vec!["atoms".to_owned()],
+        }];
+
+        write_artifacts(&config, &stories).expect("first build");
+
+        let manifest_path = PathBuf::from(&config.build.out_dir).join("showcase.manifest.json");
+        let generated_path = showcase_dir.join("src/generated.rs");
+        let main_path = showcase_dir.join("src/main.rs");
+
+        let manifest = std::fs::read_to_string(&manifest_path).expect("read manifest");
+        let generated = std::fs::read_to_string(&generated_path).expect("read generated");
+        let first_main = std::fs::read_to_string(&main_path).expect("read main");
+
+        assert_eq!(manifest.trim_end(), GOLDEN_MANIFEST.trim_end());
+        assert_eq!(generated.trim_end(), GOLDEN_GENERATED_RS.trim_end());
+
+        write_artifacts(&config, &stories).expect("second build");
+        let second_main = std::fs::read_to_string(&main_path).expect("read second main");
+        let second_generated =
+            std::fs::read_to_string(&generated_path).expect("read second generated");
+        let second_manifest =
+            std::fs::read_to_string(&manifest_path).expect("read second manifest");
+
+        assert_eq!(first_main, second_main);
+        assert_eq!(generated, second_generated);
+        assert_eq!(manifest, second_manifest);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

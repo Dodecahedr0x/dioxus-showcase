@@ -1,0 +1,1 @@
+{"schema_version":1,"stories":[{"id":"atoms-button","title":"Atoms/Button","source_path":"/workspace/src/button.rs","module_path":"button_variants::Button","renderer_symbol":"__dioxus_showcase_render__Button","tags":["atoms"]}]}
