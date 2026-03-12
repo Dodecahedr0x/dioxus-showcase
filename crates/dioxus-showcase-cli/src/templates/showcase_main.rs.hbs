@@ -254,14 +254,15 @@ fn Component(id: String) -> Element {
                         p { class: "muted", "No tags" }
                     } else {
                         div { class: "tags",
-                            for tag in component.tags.into_iter() {
+                            for tag in component.tags.iter() {
                                 {
                                     let is_active = active_tag.as_deref() == Some(tag.as_str());
+                                    let tag_value = tag.clone();
                                     rsx! {
                                         button {
                                             key: "{tag}",
                                             class: if is_active { "tag tag-button active" } else { "tag tag-button" },
-                                            onclick: move |_| selected_tag.set(Some(tag.clone())),
+                                            onclick: move |_| selected_tag.set(Some(tag_value.clone())),
                                             "{tag}"
                                         }
                                     }
@@ -269,9 +270,7 @@ fn Component(id: String) -> Element {
                             }
                         }
                     }
-                    section { class: "canvas",
-                        StoryCanvas { component }
-                    }
+                    section { class: "canvas", {story_canvas(component)} }
                 } else {
                     h2 { "Component not found" }
                     p { class: "muted", "No annotated component matched route id '{id}'." }
@@ -281,8 +280,7 @@ fn Component(id: String) -> Element {
     }
 }
 
-#[component]
-fn StoryCanvas(component: generated::ShowcaseComponentDefinition) -> Element {
+fn story_canvas(component: generated::ShowcaseComponentDefinition) -> Element {
     rsx! {
         ErrorBoundary {
             handle_error: |errors: ErrorContext| {

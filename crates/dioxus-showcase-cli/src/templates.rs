@@ -291,7 +291,8 @@ mod tests {
         assert!(app.contains("#[route(\"/component/:id\")"));
         assert!(app.contains("#[route(\"/:..route\")"));
         assert!(app.contains("fn Component(id: String) -> Element"));
-        assert!(app.contains("fn StoryCanvas(component: generated::ShowcaseComponentDefinition)"));
+        assert!(app.contains("fn story_canvas(component: generated::ShowcaseComponentDefinition)"));
+        assert!(app.contains("section { class: \"canvas\", {story_canvas(component)} }"));
         assert!(app.contains("ErrorBoundary {"));
         assert!(app.contains("errors.clear_errors()"));
         assert!(app.contains("Story render failed"));
