@@ -5,12 +5,16 @@ use dioxus_showcase_core::StoryDefinition;
 pub mod prelude {
     pub use crate::{GeneratedStory, ShowcaseStoryFactory};
     pub use crate::{StoryArg, StoryArgs, StoryProps, StoryVariant};
-    pub use dioxus_showcase_core::{ShowcaseRegistry, StoryDefinition, StoryEntry};
-    pub use dioxus_showcase_macros::{showcase, story, StoryProps};
+    pub use dioxus_showcase_core::{
+        ProviderDefinition, ShowcaseRegistry, StoryDefinition, StoryEntry,
+    };
+    pub use dioxus_showcase_macros::{provider, showcase, story, StoryProps};
 }
 
 pub use dioxus_showcase_core as core;
 pub use dioxus_showcase_macros as macros;
+
+pub type StoryProvider = fn(Element) -> Element;
 
 pub fn slugify_title(title: &str) -> String {
     let mut out = String::with_capacity(title.len());
@@ -131,6 +135,16 @@ pub struct GeneratedStory {
 
 pub trait ShowcaseStoryFactory {
     fn create(source_path: &str, module_path: &str) -> Vec<GeneratedStory>;
+}
+
+#[component]
+pub fn StoryPreviewContent(children: Element) -> Element {
+    let providers = try_use_context::<Vec<StoryProvider>>().unwrap_or_default();
+    let mut wrapped = children;
+    for provider in providers.into_iter().rev() {
+        wrapped = provider(wrapped);
+    }
+    wrapped
 }
 
 #[cfg(test)]

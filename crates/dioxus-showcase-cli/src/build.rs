@@ -14,7 +14,10 @@ use dioxus_showcase_core::ShowcaseConfig;
 use crate::{
     cli::BuildArgs,
     commands::load_config,
-    discovery::{discover_component_source_files, discover_components, validate_component_ids},
+    discovery::{
+        discover_component_source_files, discover_components, discover_providers,
+        validate_component_ids,
+    },
     scaffold::{showcase_app_dir, write_artifacts},
 };
 
@@ -44,9 +47,10 @@ pub fn cmd_build(args: BuildArgs) -> Result<(), String> {
 
 pub fn rebuild_showcase_artifacts(config: &ShowcaseConfig) -> Result<usize, String> {
     let mut components = discover_components(Path::new("."), config)?;
+    let providers = discover_providers(Path::new("."), config)?;
     components.sort_by(|a, b| a.title.cmp(&b.title));
     validate_component_ids(&components)?;
-    write_artifacts(config, &components)?;
+    write_artifacts(config, &components, &providers)?;
     Ok(components.len())
 }
 

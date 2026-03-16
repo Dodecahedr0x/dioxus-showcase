@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use dioxus_showcase_core::{ShowcaseConfig, StoryDefinition};
+use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition};
 use handlebars::{no_escape, Handlebars};
 use serde::Serialize;
 
@@ -17,6 +17,7 @@ const SHOWCASE_APP_CSS_TEMPLATE: &str = include_str!("templates/showcase_app.css
 struct RuntimeContext {
     generation: String,
     components: Vec<RuntimeComponent>,
+    providers: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -50,6 +51,7 @@ struct MainTemplateContext {
 
 pub fn render_generated_runtime_rs(
     stories: &[StoryDefinition],
+    providers: &[ProviderDefinition],
     generation: &str,
 ) -> Result<String, String> {
     let entry_crate_alias = "showcase_entry".to_owned();
@@ -65,10 +67,11 @@ pub fn render_generated_runtime_rs(
             ),
         })
         .collect();
+    let providers = render_provider_paths(&entry_crate_alias, providers);
 
     render_template(
         GENERATED_RUNTIME_TEMPLATE,
-        &RuntimeContext { generation: escape_rust_string(generation), components },
+        &RuntimeContext { generation: escape_rust_string(generation), components, providers },
     )
 }
 
@@ -133,6 +136,28 @@ fn render_story_path(entry_crate_alias: &str, module_path: &str, renderer_symbol
     }
     segments.pop();
     segments.push(story_symbol.as_str());
+    format!("{entry_crate_alias}::{}", segments.join("::"))
+}
+
+fn render_provider_paths(entry_crate_alias: &str, providers: &[ProviderDefinition]) -> Vec<String> {
+    let mut ordered = providers.to_vec();
+    ordered.sort_by_key(|provider| provider.index);
+    ordered
+        .into_iter()
+        .map(|provider| {
+            render_provider_path(entry_crate_alias, &provider.module_path, &provider.wrap_symbol)
+        })
+        .collect()
+}
+
+fn render_provider_path(entry_crate_alias: &str, module_path: &str, wrap_symbol: &str) -> String {
+    let mut segments: Vec<&str> =
+        module_path.split("::").filter(|segment| !segment.is_empty()).collect();
+    if segments.is_empty() {
+        return format!("{entry_crate_alias}::{wrap_symbol}");
+    }
+    segments.pop();
+    segments.push(wrap_symbol);
     format!("{entry_crate_alias}::{}", segments.join("::"))
 }
 
@@ -241,7 +266,7 @@ mod tests {
             tags: vec!["atoms".to_owned()],
         }];
 
-        let runtime = render_generated_runtime_rs(&stories, "gen-1").expect("render runtime");
+        let runtime = render_generated_runtime_rs(&stories, &[], "gen-1").expect("render runtime");
         assert!(
             runtime.contains("pub fn showcase_components() -> Vec<ShowcaseComponentDefinition>")
         );
@@ -251,6 +276,40 @@ mod tests {
         );
         assert!(runtime.contains("duplicate showcase id '{}'"));
         assert!(runtime.contains("r#\"button_variants::Button\"#"));
+        assert!(
+            runtime.contains("pub fn story_providers() -> Vec<::dioxus_showcase::StoryProvider>")
+        );
+    }
+
+    #[test]
+    fn generated_runtime_wraps_stories_with_providers() {
+        let stories = vec![StoryDefinition {
+            id: "atoms-button".to_owned(),
+            title: "Atoms/Button".to_owned(),
+            source_path: "/workspace/src/button.rs".to_owned(),
+            module_path: "button_variants::Button".to_owned(),
+            renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
+            tags: vec!["atoms".to_owned()],
+        }];
+        let providers = vec![
+            ProviderDefinition {
+                source_path: "/workspace/src/provider_a.rs".to_owned(),
+                module_path: "providers::Outer".to_owned(),
+                wrap_symbol: "__dioxus_showcase_wrap__Outer".to_owned(),
+                index: 0,
+            },
+            ProviderDefinition {
+                source_path: "/workspace/src/provider_b.rs".to_owned(),
+                module_path: "providers::Inner".to_owned(),
+                wrap_symbol: "__dioxus_showcase_wrap__Inner".to_owned(),
+                index: 1,
+            },
+        ];
+
+        let runtime =
+            render_generated_runtime_rs(&stories, &providers, "gen-2").expect("render runtime");
+        assert!(runtime.contains("showcase_entry::providers::__dioxus_showcase_wrap__Outer,"));
+        assert!(runtime.contains("showcase_entry::providers::__dioxus_showcase_wrap__Inner,"));
     }
 
     #[test]

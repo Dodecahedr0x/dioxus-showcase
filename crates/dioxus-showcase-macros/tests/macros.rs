@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_showcase::{StoryProps as StoryPropsTrait, StoryVariant};
-use dioxus_showcase_macros::{showcase, story, StoryProps};
+use dioxus_showcase_macros::{provider, showcase, story, StoryProps};
 
 #[derive(Default, StoryProps)]
 struct ButtonArgs;
@@ -83,6 +83,14 @@ fn slot_component(content: Element) -> Element {
     }
 }
 
+#[provider(index = 2)]
+#[component]
+fn story_shell(children: Element) -> Element {
+    rsx! {
+        div { class: "story-shell", {children} }
+    }
+}
+
 #[test]
 fn story_attribute_preserves_function_item() {
     assert_eq!(button_default(), "ok");
@@ -161,6 +169,12 @@ fn showcase_generates_story_metadata() {
         generated[0].definition.renderer_symbol,
         "__dioxus_showcase_render__button_component"
     );
+}
+
+#[test]
+fn provider_attribute_generates_wrapper_function() {
+    let wrapped = __dioxus_showcase_wrap__story_shell(rsx! { span { "inside" } });
+    assert!(wrapped.is_ok());
 }
 
 #[test]

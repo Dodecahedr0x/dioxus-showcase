@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dioxus_showcase_core::{ShowcaseConfig, StoryDefinition};
+use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition};
 use syn::{Attribute, Item};
 
 pub fn discover_components(
@@ -16,6 +16,21 @@ pub fn discover_components(
     }
 
     Ok(components)
+}
+
+pub fn discover_providers(
+    root: &Path,
+    config: &ShowcaseConfig,
+) -> Result<Vec<ProviderDefinition>, String> {
+    let entry_src_dir = entry_crate_src_dir(root, config)?;
+    let files = discover_component_source_files(root, config)?;
+    let mut providers = Vec::new();
+    for file in files {
+        providers.extend(discover_providers_in_file(&entry_src_dir, &file)?);
+    }
+
+    providers.sort_by_key(|provider| provider.index);
+    Ok(providers)
 }
 
 pub fn discover_component_source_files(
@@ -123,6 +138,28 @@ fn discover_components_in_file(
     Ok(stories)
 }
 
+fn discover_providers_in_file(
+    entry_src_dir: &Path,
+    path: &Path,
+) -> Result<Vec<ProviderDefinition>, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|err| format!("failed to read source file {}: {err}", path.display()))?;
+    let file = syn::parse_file(&content)
+        .map_err(|err| format!("failed to parse Rust source {}: {err}", path.display()))?;
+    let source_path = canonical_source_path(path)?;
+
+    let mut providers = Vec::new();
+    collect_providers_from_items(
+        entry_src_dir,
+        path,
+        &source_path,
+        &[],
+        &file.items,
+        &mut providers,
+    )?;
+    Ok(providers)
+}
+
 fn discover_external_module_files(path: &Path, items: &[Item]) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
 
@@ -197,6 +234,59 @@ fn collect_stories_from_items(
     Ok(())
 }
 
+fn collect_providers_from_items(
+    entry_src_dir: &Path,
+    file_path: &Path,
+    source_path: &str,
+    module_segments: &[String],
+    items: &[Item],
+    out: &mut Vec<ProviderDefinition>,
+) -> Result<(), String> {
+    for item in items {
+        match item {
+            Item::Fn(item_fn) => {
+                let Some(provider_attr) = find_provider_attribute(&item_fn.attrs) else {
+                    continue;
+                };
+
+                let metadata = parse_provider_attribute(provider_attr, file_path)?;
+                let component_name = item_fn.sig.ident.to_string();
+                let mut module_path_segments = module_segments.to_vec();
+                module_path_segments.push(component_name.clone());
+
+                out.push(ProviderDefinition {
+                    source_path: source_path.to_owned(),
+                    module_path: render_module_path(
+                        entry_src_dir,
+                        file_path,
+                        &module_path_segments,
+                    )?,
+                    wrap_symbol: showcase_provider_symbol(&component_name),
+                    index: metadata.index.unwrap_or(0),
+                });
+            }
+            Item::Mod(item_mod) => {
+                let Some((_, nested_items)) = &item_mod.content else {
+                    continue;
+                };
+                let mut nested_segments = module_segments.to_vec();
+                nested_segments.push(item_mod.ident.to_string());
+                collect_providers_from_items(
+                    entry_src_dir,
+                    file_path,
+                    source_path,
+                    &nested_segments,
+                    nested_items,
+                    out,
+                )?;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
 fn find_story_attribute(attrs: &[Attribute]) -> Option<&Attribute> {
     attrs.iter().find(|attr| {
         attr.path()
@@ -204,6 +294,12 @@ fn find_story_attribute(attrs: &[Attribute]) -> Option<&Attribute> {
             .last()
             .is_some_and(|segment| segment.ident == "showcase" || segment.ident == "story")
     })
+}
+
+fn find_provider_attribute(attrs: &[Attribute]) -> Option<&Attribute> {
+    attrs
+        .iter()
+        .find(|attr| attr.path().segments.last().is_some_and(|segment| segment.ident == "provider"))
 }
 
 fn resolve_external_module_path(
@@ -283,6 +379,7 @@ fn module_path_override(attrs: &[Attribute]) -> Result<Option<String>, String> {
 struct ShowcaseAttrMeta {
     title: Option<String>,
     tags: Vec<String>,
+    index: Option<i32>,
 }
 
 fn parse_showcase_component_attribute(
@@ -339,7 +436,31 @@ fn parse_showcase_component_attribute(
 
     let title = title;
 
-    Ok(ShowcaseAttrMeta { title, tags })
+    Ok(ShowcaseAttrMeta { title, tags, index: None })
+}
+
+fn parse_provider_attribute(
+    attribute: &Attribute,
+    path: &Path,
+) -> Result<ShowcaseAttrMeta, String> {
+    let mut index = None;
+
+    attribute
+        .parse_nested_meta(|meta| {
+            if meta.path.is_ident("index") {
+                let value: syn::LitInt = meta.value()?.parse()?;
+                index =
+                    Some(value.base10_parse::<i32>().map_err(|err| {
+                        meta.error(format!("provider index must fit in i32: {err}"))
+                    })?);
+                return Ok(());
+            }
+
+            Err(meta.error("provider attributes only support index = <integer>"))
+        })
+        .map_err(|err| format!("invalid provider attribute in {}: {err}", path.display()))?;
+
+    Ok(ShowcaseAttrMeta { title: None, tags: Vec::new(), index })
 }
 
 fn component_name_from_path(expr_path: &syn::ExprPath) -> Result<String, String> {
@@ -439,6 +560,10 @@ fn showcase_renderer_symbol(component_name: &str) -> String {
     format!("__dioxus_showcase_render__{component_name}")
 }
 
+fn showcase_provider_symbol(component_name: &str) -> String {
+    format!("__dioxus_showcase_wrap__{component_name}")
+}
+
 pub fn showcase_story_symbol(renderer_symbol: &str) -> String {
     renderer_symbol.replacen("__dioxus_showcase_render__", "__dioxus_showcase_story__", 1)
 }
@@ -492,6 +617,7 @@ mod tests {
             showcase_story_symbol("__dioxus_showcase_render__Button"),
             "__dioxus_showcase_story__Button"
         );
+        assert_eq!(showcase_provider_symbol("Shell"), "__dioxus_showcase_wrap__Shell");
     }
 
     #[test]
@@ -622,6 +748,29 @@ fn button_primary() -> Element { todo!() }
         assert_eq!(stories[0].tags, vec!["atoms".to_owned(), "button".to_owned()]);
         assert_eq!(stories[0].module_path, "button::button_primary");
         assert_eq!(stories[0].renderer_symbol, "__dioxus_showcase_render__button_primary");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn discover_providers_in_file_extracts_ordering() {
+        let dir = temp_dir("dioxus-showcase-discover-provider");
+        let path = dir.join("provider.rs");
+        std::fs::write(
+            &path,
+            r#"
+#[provider(index = 2)]
+#[component]
+fn Shell(children: Element) -> Element { children }
+"#,
+        )
+        .expect("write file");
+
+        let providers = discover_providers_in_file(&dir, &path).expect("discover providers");
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].module_path, "provider::Shell");
+        assert_eq!(providers[0].wrap_symbol, "__dioxus_showcase_wrap__Shell");
+        assert_eq!(providers[0].index, 2);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

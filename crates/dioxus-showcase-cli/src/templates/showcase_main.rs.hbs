@@ -62,6 +62,7 @@ impl ThemeMode {
 fn App() -> Element {
     use_context_provider(|| Signal::new(None::<String>));
     let theme = use_context_provider(|| Signal::new(ThemeMode::Light));
+    use_context_provider(generated::story_providers);
 
     rsx! {
         {{#each stylesheets}}

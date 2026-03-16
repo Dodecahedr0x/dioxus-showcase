@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dioxus_showcase_core::{ShowcaseConfig, StoryDefinition, StoryManifest};
+use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition, StoryManifest};
 
 use crate::templates;
 
@@ -12,6 +12,7 @@ pub fn showcase_app_dir(config: &ShowcaseConfig) -> PathBuf {
 pub fn write_artifacts(
     config: &ShowcaseConfig,
     stories: &[StoryDefinition],
+    providers: &[ProviderDefinition],
 ) -> Result<PathBuf, String> {
     let out_dir = PathBuf::from(&config.build.out_dir);
     fs::create_dir_all(&out_dir)
@@ -34,8 +35,9 @@ pub fn write_artifacts(
         .map_err(|err| format!("failed to create {}: {err}", main_path.display()))?;
 
     let generated_path = showcase_app_dir(config).join("src/generated.rs");
-    let generation = stable_generation_token(stories);
-    let generated_runtime = templates::render_generated_runtime_rs(stories, &generation)?;
+    let generation = stable_generation_token(stories, providers);
+    let generated_runtime =
+        templates::render_generated_runtime_rs(stories, providers, &generation)?;
     fs::write(&generated_path, generated_runtime)
         .map_err(|err| format!("failed to create {}: {err}", generated_path.display()))?;
 
@@ -69,7 +71,7 @@ pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<(), Strin
         .map_err(|err| format!("failed to create {}: {err}", main_rs_path.display()))?;
 
     let generated_rs_path = src_dir.join("generated.rs");
-    let generated_rs = templates::render_generated_runtime_rs(&[], "initial")?;
+    let generated_rs = templates::render_generated_runtime_rs(&[], &[], "initial")?;
     fs::write(&generated_rs_path, generated_rs)
         .map_err(|err| format!("failed to create {}: {err}", generated_rs_path.display()))?;
 
@@ -102,7 +104,10 @@ fn sync_entry_assets_and_collect_stylesheets(
     Ok(stylesheets)
 }
 
-fn stable_generation_token(stories: &[StoryDefinition]) -> String {
+fn stable_generation_token(
+    stories: &[StoryDefinition],
+    providers: &[ProviderDefinition],
+) -> String {
     let mut manifest = StoryManifest::new(1);
     for story in stories {
         manifest.add_story(story.clone());
@@ -112,6 +117,20 @@ fn stable_generation_token(stories: &[StoryDefinition]) -> String {
     for byte in manifest.to_json().bytes() {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x100000001b3);
+    }
+    for provider in providers {
+        for byte in provider.module_path.bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        for byte in provider.wrap_symbol.bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        for byte in provider.index.to_le_bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
     }
 
     format!("manifest-{hash:016x}")
@@ -195,7 +214,7 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use dioxus_showcase_core::{ShowcaseConfig, StoryDefinition};
+    use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition};
 
     use super::{stable_generation_token, write_artifacts};
 
@@ -249,6 +268,7 @@ mod tests {
                 renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
                 tags: vec![],
             }],
+            &[],
         )
         .expect("write artifacts");
 
@@ -293,7 +313,7 @@ mod tests {
             tags: vec!["atoms".to_owned()],
         }];
 
-        write_artifacts(&config, &stories).expect("first build");
+        write_artifacts(&config, &stories, &[]).expect("first build");
 
         let manifest_path = PathBuf::from(&config.build.out_dir).join("showcase.manifest.json");
         let generated_path = showcase_dir.join("src/generated.rs");
@@ -306,7 +326,7 @@ mod tests {
         assert_eq!(manifest.trim_end(), GOLDEN_MANIFEST.trim_end());
         assert_eq!(generated.trim_end(), GOLDEN_GENERATED_RS.trim_end());
 
-        write_artifacts(&config, &stories).expect("second build");
+        write_artifacts(&config, &stories, &[]).expect("second build");
         let second_main = std::fs::read_to_string(&main_path).expect("read second main");
         let second_generated =
             std::fs::read_to_string(&generated_path).expect("read second generated");
@@ -331,10 +351,18 @@ mod tests {
             tags: vec!["atoms".to_owned()],
         }];
 
-        let first = stable_generation_token(&stories);
-        let second = stable_generation_token(&stories);
+        let first = stable_generation_token(&stories, &[]);
+        let second = stable_generation_token(&stories, &[]);
 
         assert_eq!(first, second);
         assert!(first.starts_with("manifest-"));
+
+        let providers = vec![ProviderDefinition {
+            source_path: "src/provider.rs".to_owned(),
+            module_path: "provider::Shell".to_owned(),
+            wrap_symbol: "__dioxus_showcase_wrap__Shell".to_owned(),
+            index: 1,
+        }];
+        assert_ne!(first, stable_generation_token(&stories, &providers));
     }
 }

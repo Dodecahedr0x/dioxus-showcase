@@ -33,7 +33,7 @@ cargo run -p dioxus-showcase-cli -- dev
 
 1. Replace include-based runtime generation with stable crate/module registration.
 2. Add args/controls integration to generated runtime app.
-3. Add decorator and global provider hooks.
+3. Add per-story decorators on top of global provider hooks.
 4. Add visual regression and a11y check addons.
 
 ## Runtime bridge (prototype)

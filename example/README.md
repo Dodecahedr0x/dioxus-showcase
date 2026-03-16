@@ -9,6 +9,7 @@ It demonstrates a project layout where annotated components live inside the work
 ## Files
 
 - `src/button_variants.rs`: annotated `#[showcase]` components and `#[story]` functions discovered by `dioxus-showcase`
+- `#[provider]` components wrap every story with shared layout or context
 - `src/lib.rs`: crate-level docs and exported module wiring
 
 ## Defining stories
@@ -27,6 +28,20 @@ pub fn pill_button_primary() -> Element {
     rsx! { PillButtonControllable { label: "Save Changes".to_string(), disabled: false } }
 }
 ```
+
+Wrap all stories in a shared provider component:
+
+```rust
+#[provider(index = 0)]
+#[component]
+fn StoryShell(children: Element) -> Element {
+    rsx! {
+        div { class: "shell", {children} }
+    }
+}
+```
+
+Lower `index` values wrap first, so `index = 0` becomes the outermost provider.
 
 ## Run with dioxus-showcase
 

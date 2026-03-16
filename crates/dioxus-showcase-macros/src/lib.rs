@@ -1,6 +1,7 @@
 extern crate proc_macro;
 
 mod derive_story_props;
+mod provider;
 mod showcase;
 mod story;
 mod utils;
@@ -71,6 +72,18 @@ pub fn story(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn showcase(attr: TokenStream, item: TokenStream) -> TokenStream {
     showcase::expand(attr.into(), item.into()).into()
+}
+
+/// Marks a Dioxus component as a global story provider.
+///
+/// The annotated component must declare a `children` parameter explicitly.
+/// Any additional parameters are initialized from `StoryArg::story_arg()`.
+///
+/// Supported arguments:
+/// - `index = 0`
+#[proc_macro_attribute]
+pub fn provider(attr: TokenStream, item: TokenStream) -> TokenStream {
+    provider::expand(attr.into(), item.into()).into()
 }
 
 /// Derives `dioxus_showcase::StoryArg` and `dioxus_showcase::StoryProps`

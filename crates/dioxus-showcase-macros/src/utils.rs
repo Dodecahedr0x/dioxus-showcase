@@ -102,7 +102,9 @@ pub fn render_story_frame(preview: TokenStream2) -> TokenStream2 {
     quote! {
         div { class: "story-preview",
             div { class: "story-canvas",
-                #preview
+                ::dioxus_showcase::StoryPreviewContent {
+                    #preview
+                }
             }
         }
     }
@@ -184,6 +186,7 @@ pub struct ShowcaseMeta {
     pub component: Option<String>,
     pub name: Option<String>,
     pub tags: Vec<String>,
+    pub index: Option<i32>,
 }
 
 pub fn parse_showcase_meta(attr: TokenStream2) -> Result<ShowcaseMeta, String> {
@@ -232,6 +235,20 @@ pub fn parse_showcase_meta(attr: TokenStream2) -> Result<ShowcaseMeta, String> {
                 return Err("showcase tags must be an array of string literals".to_owned());
             };
             out.tags = parse_tags_array(&array)?;
+            continue;
+        }
+
+        if named.path.is_ident("index") {
+            let syn::Expr::Lit(expr_lit) = named.value else {
+                return Err("showcase index must be an integer literal".to_owned());
+            };
+            let syn::Lit::Int(lit) = expr_lit.lit else {
+                return Err("showcase index must be an integer literal".to_owned());
+            };
+            out.index = Some(
+                lit.base10_parse::<i32>()
+                    .map_err(|_| "showcase index must fit in i32".to_owned())?,
+            );
         }
     }
 

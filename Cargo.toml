@@ -4,7 +4,7 @@ members = [
   "crates/dioxus-showcase-macros",
   "crates/dioxus-showcase",
   "crates/dioxus-showcase-cli",
-  "examples/*",
+  "example",
 ]
 resolver = "2"
 

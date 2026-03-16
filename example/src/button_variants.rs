@@ -1,6 +1,17 @@
 use dioxus::prelude::*;
 use dioxus_showcase::prelude::*;
 
+#[provider(index = 0)]
+#[component]
+pub fn ExampleStoryShell(children: Element) -> Element {
+    rsx! {
+        div {
+            style: "padding: 24px; background: #f8fafc; border-radius: 18px;",
+            {children}
+        }
+    }
+}
+
 /// Interactive component discovered via `#[showcase]`.
 #[showcase(tags = ["examples", "workspace"])]
 #[component]

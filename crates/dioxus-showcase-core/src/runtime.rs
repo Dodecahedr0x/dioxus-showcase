@@ -7,6 +7,14 @@ pub struct StoryEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderDefinition {
+    pub source_path: String,
+    pub module_path: String,
+    pub wrap_symbol: String,
+    pub index: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoryNavigationNode {
     pub segment: String,
     pub title_path: String,

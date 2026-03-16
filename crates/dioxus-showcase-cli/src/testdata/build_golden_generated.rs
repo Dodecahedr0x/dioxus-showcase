@@ -12,6 +12,11 @@ pub struct ShowcaseComponentDefinition {
     pub render: ComponentRenderFn,
 }
 
+pub fn story_providers() -> Vec<::dioxus_showcase::StoryProvider> {
+    vec![
+    ]
+}
+
 pub fn showcase_components() -> Vec<ShowcaseComponentDefinition> {
     let mut components = Vec::new();
     let mut ids = HashSet::new();
