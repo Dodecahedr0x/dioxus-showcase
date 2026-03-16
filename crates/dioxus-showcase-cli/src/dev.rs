@@ -25,7 +25,12 @@ pub fn cmd_dev() -> Result<(), String> {
     println!("Starting dioxus-showcase app...");
     println!("Discovered {} showcase components.", initial_count);
     println!("App directory: {}", app_dir.display());
-    println!("Launching: dx serve --web --port {} --addr {}", dev_port, config.dev.host);
+    println!(
+        "Launching in {}: dx serve --web --port {} --addr {}",
+        app_dir.display(),
+        dev_port,
+        config.dev.host
+    );
     println!("Watching component crate for changes (auto-regenerates showcase routes/runtime).");
     println!("Press Ctrl+C to stop.");
 

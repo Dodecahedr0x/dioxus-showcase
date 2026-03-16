@@ -3,7 +3,6 @@ use dioxus::prelude::*;
 use std::collections::HashSet;
 
 pub type ComponentRenderFn = Box<dyn Fn() -> Element>;
-pub const SHOWCASE_GENERATION: &str = "{{generation}}";
 
 pub struct ShowcaseComponentDefinition {
     pub id: String,
