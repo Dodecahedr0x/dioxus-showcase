@@ -9,7 +9,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 license = "MIT"
 authors = ["Dodecahedr0x <dodecahedr0x@proton.me>"]
@@ -17,9 +17,9 @@ authors = ["Dodecahedr0x <dodecahedr0x@proton.me>"]
 [workspace.dependencies]
 clap = { version = "4.5", features = ["derive"] }
 dioxus = { version = "0.7" }
-dioxus-showcase-core = { version = "0.0.6", path = "crates/dioxus-showcase-core" }
-dioxus-showcase-macros = { version = "0.0.6", path = "crates/dioxus-showcase-macros" }
-dioxus-showcase = { version = "0.0.6", path = "crates/dioxus-showcase" }
+dioxus-showcase-core = { version = "0.0.7", path = "crates/dioxus-showcase-core" }
+dioxus-showcase-macros = { version = "0.0.7", path = "crates/dioxus-showcase-macros" }
+dioxus-showcase = { version = "0.0.7", path = "crates/dioxus-showcase" }
 handlebars = "6.3"
 proc-macro2 = "1.0"
 quote = "1.0"
