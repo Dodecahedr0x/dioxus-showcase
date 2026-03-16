@@ -1,16 +1,14 @@
 # Dioxus Showcase
 
-Storybook-style tooling for Dioxus.
+Storybook-style tooling for Dioxus, split into macros, shared runtime types, a facade crate, a CLI generator, and a live example workspace member.
 
-## Current state
+## The Shape Of The Repo
 
-This repository contains a scaffold:
-
-1. RFC spec in `docs/rfcs/dioxus-showcase.md`
-2. Core data model crate
-3. Macro crate with placeholder macros
-4. Facade crate for end users
-5. CLI prototype (`dioxus-showcase`)
+- `crates/dioxus-showcase-core`: config, manifest, provider metadata, navigation helpers.
+- `crates/dioxus-showcase-macros`: `#[showcase]`, `#[story]`, `#[provider]`, and `#[derive(StoryProps)]`.
+- `crates/dioxus-showcase`: public facade and trait surface for app code.
+- `crates/dioxus-showcase-cli`: discovery, scaffolding, generation, asset sync, and `dx serve` orchestration.
+- `example`: a working annotated crate used to exercise the end-to-end pipeline.
 
 ## Quickstart
 
@@ -21,69 +19,32 @@ cargo run -p dioxus-showcase-cli -- build
 cargo run -p dioxus-showcase-cli -- dev
 ```
 
-## Prototype commands
+## Current Runtime Model
 
-1. `init`: interactive prompt to write `DioxusShowcase.toml`, then creates the runnable `showcase/` Dioxus app crate
-2. `check`: validates config + discovers `#[showcase_component]` annotations + checks duplicate IDs
-3. `build`: writes `target/showcase/showcase.manifest.json` and updates `showcase/src/generated.rs`
-4. `dev`: launches via `dx serve` and keeps regenerating showcase artifacts when source files change
-5. `doctor`: prints host diagnostics
+1. Annotate Dioxus functions with `#[showcase]`, `#[story]`, and `#[provider]`.
+2. Run the CLI against the configured entry crate.
+3. The CLI discovers story/provider metadata and writes:
+   - `target/showcase/showcase.manifest.json`
+   - `showcase/src/generated.rs`
+   - `showcase/src/main.rs`
+4. The generated showcase app imports the entry crate, builds routes at `/component/:id`, and renders stories inside a responsive shell with tags, tree navigation, and theme switching.
 
-## Next implementation steps
+## Commands
 
-1. Replace include-based runtime generation with stable crate/module registration.
-2. Add args/controls integration to generated runtime app.
-3. Add per-story decorators on top of global provider hooks.
-4. Add visual regression and a11y check addons.
+- `init`: prompt for `DioxusShowcase.toml` values and scaffold the generated app crate.
+- `check`: validate config, discovery, duplicate ids, and scaffold presence.
+- `build`: write the manifest and generated runtime files.
+- `build --watch`: rebuild when annotated source files change.
+- `dev`: rebuild in the background and launch `dx serve`.
+- `doctor`: print basic host diagnostics.
 
-## Runtime bridge (prototype)
+## Read The Detailed Docs
 
-`build` updates `showcase/src/generated.rs` with generated component render dispatch stubs:
+- Full code reference: [`docs/code-reference.md`](docs/code-reference.md)
+- Example walkthrough: [`example/README.md`](example/README.md)
+- Design intent: [`docs/rfcs/dioxus-showcase.md`](docs/rfcs/dioxus-showcase.md)
 
-```rust
-mod generated;
-```
-
-The app crate uses Dioxus Router to provide a dedicated route per discovered component:
-
-```rust
-// /showcase/src/main.rs
-#[derive(Routable)]
-enum Route {
-    #[route("/")]
-    Home {},
-    #[route("/component/:id")]
-    Component { id: String },
-}
-```
-
-Current constraints:
-
-1. Annotated showcase components must be zero-prop components.
-2. Source files are included via `include!`, so imports in annotated files must resolve in the showcase app crate.
-3. `#[showcase_component(...)]` supports both single-line and multi-line forms.
-4. The generated app layout is responsive and route-based for web and mobile-friendly usage.
-
-## Showcase app crate
-
-`init` creates a runnable Dioxus app crate at `showcase/`:
-
-```bash
-cd showcase
-dx serve --web --port 6111 --addr 127.0.0.1
-```
-
-## Example workspace member
-
-An end-to-end example workspace member is available at:
-
-- `examples/basic`
-
-It includes `#[showcase_component]` annotations and can be discovered by `dioxus-showcase` when run from the repository root.
-
-## Release flow
-
-Release tags must point at a commit that already contains the target workspace version in `Cargo.toml`.
+## Release Flow
 
 ```bash
 ./scripts/set-workspace-version.sh X.Y.Z

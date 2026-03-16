@@ -15,6 +15,7 @@ use crate::{
     scaffold::showcase_app_dir,
 };
 
+/// Rebuilds artifacts, starts a watcher thread, and launches `dx serve`.
 pub fn cmd_dev() -> Result<(), String> {
     let config = load_config()?;
     let app_dir = showcase_app_dir(&config);
@@ -66,6 +67,8 @@ pub fn cmd_dev() -> Result<(), String> {
         Err(format!("`dx serve` exited with status {status}"))
     }
 }
+
+/// Finds the first bindable port within a bounded range on the requested host.
 fn find_available_port(host: &str, preferred_port: u16, max_attempts: u16) -> Result<u16, String> {
     let upper = preferred_port.saturating_add(max_attempts);
     for port in preferred_port..=upper {

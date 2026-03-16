@@ -4,6 +4,7 @@ use syn::FnArg;
 
 use crate::utils::parse_showcase_meta;
 
+/// Expands `#[provider]` into a wrapper function used by the generated showcase shell.
 pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
     let provider_meta = match parse_showcase_meta(attr) {
         Ok(meta) => meta,

@@ -6,6 +6,7 @@ use crate::{
     scaffold::showcase_app_dir,
 };
 
+/// Runs a lightweight validation pass without generating new artifacts.
 pub fn cmd_check() -> Result<(), String> {
     let config = load_config()?;
     let mut components = discover_components(Path::new("."), &config)?;

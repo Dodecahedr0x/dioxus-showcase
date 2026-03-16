@@ -16,6 +16,7 @@ pub use dioxus_showcase_macros as macros;
 
 pub type StoryProvider = fn(Element) -> Element;
 
+/// Converts a display title like `Atoms/Button` into a stable route slug.
 pub fn slugify_title(title: &str) -> String {
     let mut out = String::with_capacity(title.len());
     let mut prev_dash = false;
@@ -39,15 +40,18 @@ pub fn slugify_title(title: &str) -> String {
 
 /// Produces a single default story value for one component parameter.
 pub trait StoryArg: Sized {
+    /// Returns the default value used when a story parameter needs a seed value.
     fn story_arg() -> Self;
 }
 
 /// Produces one or more story values for aggregate props types.
 pub trait StoryArgs: Sized {
+    /// Returns all available aggregate values for a story source.
     fn stories() -> Vec<Self>;
 }
 
 impl<T: StoryArg> StoryArgs for T {
+    /// Wraps a single `StoryArg` value in a one-item story list.
     fn stories() -> Vec<Self> {
         vec![T::story_arg()]
     }
@@ -55,6 +59,7 @@ impl<T: StoryArg> StoryArgs for T {
 
 /// Produces one or more named prop sets for a showcase component.
 pub trait StoryProps: Sized {
+    /// Returns the prop variants rendered as separate showcase stories.
     fn stories() -> Vec<StoryVariant<Self>>;
 }
 
@@ -65,10 +70,12 @@ pub struct StoryVariant<T> {
 }
 
 impl<T> StoryVariant<T> {
+    /// Creates an unnamed story variant.
     pub fn unnamed(value: T) -> Self {
         Self { name: None, value }
     }
 
+    /// Creates a named story variant appended to the base title.
     pub fn named(name: impl Into<String>, value: T) -> Self {
         Self { name: Some(name.into()), value }
     }
@@ -91,30 +98,35 @@ impl_story_arg_with_default!(
 );
 
 impl StoryArg for &'static str {
+    /// Uses placeholder copy for string controls.
     fn story_arg() -> Self {
         "Lorem Ipsum"
     }
 }
 
 impl StoryArg for String {
+    /// Uses placeholder copy for owned string controls.
     fn story_arg() -> Self {
         "Lorem Ipsum".to_string()
     }
 }
 
 impl<T> StoryArg for Option<T> {
+    /// Defaults optional values to `None`.
     fn story_arg() -> Self {
         None
     }
 }
 
 impl<T> StoryArg for Vec<T> {
+    /// Defaults vector values to an empty collection.
     fn story_arg() -> Self {
         Vec::new()
     }
 }
 
 impl StoryArg for Element {
+    /// Produces placeholder markup for element slot arguments.
     fn story_arg() -> Self {
         rsx! {
             div { "Story content" }
@@ -123,6 +135,7 @@ impl StoryArg for Element {
 }
 
 impl<T: Sized + 'static> StoryArg for EventHandler<T> {
+    /// Produces a no-op callback for event handler props.
     fn story_arg() -> Self {
         Callback::new(|_| {})
     }
@@ -134,9 +147,11 @@ pub struct GeneratedStory {
 }
 
 pub trait ShowcaseStoryFactory {
+    /// Creates the generated story list for one annotated source item.
     fn create(source_path: &str, module_path: &str) -> Vec<GeneratedStory>;
 }
 
+/// Wraps rendered story content with the currently registered provider chain.
 #[component]
 pub fn StoryPreviewContent(children: Element) -> Element {
     let providers = try_use_context::<Vec<StoryProvider>>().unwrap_or_default();

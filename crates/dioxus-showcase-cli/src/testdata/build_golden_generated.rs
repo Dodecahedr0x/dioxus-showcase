@@ -12,11 +12,13 @@ pub struct ShowcaseComponentDefinition {
     pub render: ComponentRenderFn,
 }
 
+/// Returns the provider wrapper chain used around every rendered story.
 pub fn story_providers() -> Vec<::dioxus_showcase::StoryProvider> {
     vec![
     ]
 }
 
+/// Expands all generated story constructors into renderable showcase definitions.
 pub fn showcase_components() -> Vec<ShowcaseComponentDefinition> {
     let mut components = Vec::new();
     let mut ids = HashSet::new();

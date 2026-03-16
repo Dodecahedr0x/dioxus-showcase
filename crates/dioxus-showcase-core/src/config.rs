@@ -55,10 +55,12 @@ impl Default for ShowcaseBuildConfig {
 }
 
 impl ShowcaseConfig {
+    /// Serializes the config into the on-disk `DioxusShowcase.toml` format.
     pub fn as_toml_string(&self) -> String {
         toml::to_string_pretty(self).expect("showcase config serialization should not fail")
     }
 
+    /// Writes a default config file only when the target path does not already exist.
     pub fn write_default_if_missing(path: impl AsRef<Path>) -> std::io::Result<bool> {
         let path = path.as_ref();
         if path.exists() {
@@ -69,12 +71,14 @@ impl ShowcaseConfig {
         Ok(true)
     }
 
+    /// Loads and parses a config file from disk.
     pub fn from_toml_file(path: impl AsRef<Path>) -> Result<Self, String> {
         let content = std::fs::read_to_string(path.as_ref())
             .map_err(|err| format!("failed to read {}: {err}", path.as_ref().display()))?;
         Self::from_toml_str(&content)
     }
 
+    /// Parses a config from TOML source text.
     pub fn from_toml_str(content: &str) -> Result<Self, String> {
         toml::from_str(content).map_err(|err| format!("failed to parse showcase config: {err}"))
     }

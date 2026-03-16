@@ -5,10 +5,12 @@ use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition, 
 
 use crate::templates;
 
+/// Returns the configured path of the generated showcase application crate.
 pub fn showcase_app_dir(config: &ShowcaseConfig) -> PathBuf {
     PathBuf::from(&config.project.showcase_crate)
 }
 
+/// Writes the manifest, generated runtime, shell app source, and synced assets.
 pub fn write_artifacts(
     config: &ShowcaseConfig,
     stories: &[StoryDefinition],
@@ -44,6 +46,7 @@ pub fn write_artifacts(
     Ok(out_dir)
 }
 
+/// Ensures the generated showcase app directory and seed files exist.
 pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<(), String> {
     let app_dir = showcase_app_dir(config);
     let src_dir = app_dir.join("src");
@@ -82,6 +85,7 @@ pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<(), Strin
     Ok(())
 }
 
+/// Copies entry assets into the showcase app and returns all CSS asset URLs.
 fn sync_entry_assets_and_collect_stylesheets(
     config: &ShowcaseConfig,
 ) -> Result<Vec<String>, String> {
@@ -104,6 +108,7 @@ fn sync_entry_assets_and_collect_stylesheets(
     Ok(stylesheets)
 }
 
+/// Computes a deterministic token representing the current generated runtime inputs.
 fn stable_generation_token(
     stories: &[StoryDefinition],
     providers: &[ProviderDefinition],
@@ -136,6 +141,7 @@ fn stable_generation_token(
     format!("manifest-{hash:016x}")
 }
 
+/// Recursively copies one directory tree into another.
 fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), String> {
     fs::create_dir_all(to).map_err(|err| format!("failed to create {}: {err}", to.display()))?;
 
@@ -170,6 +176,7 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Collects stylesheet asset URLs relative to the generated app `assets/` directory.
 fn collect_stylesheets(
     root: &Path,
     current: &Path,

@@ -23,7 +23,9 @@ pub struct StoryNavigationNode {
 }
 
 pub trait StoryTreeEntry {
+    /// Returns the route id for this story-like entry.
     fn story_id(&self) -> &str;
+    /// Returns the slash-delimited title path for this story-like entry.
     fn story_title(&self) -> &str;
 }
 
@@ -33,10 +35,12 @@ pub struct ShowcaseRegistry {
 }
 
 impl ShowcaseRegistry {
+    /// Registers one story entry with the in-memory registry.
     pub fn register(&mut self, entry: StoryEntry) {
         self.stories.push(entry);
     }
 
+    /// Converts the registered stories into a serializable manifest.
     pub fn manifest(&self) -> StoryManifest {
         let mut manifest = StoryManifest::new(1);
         for story in &self.stories {
@@ -45,11 +49,13 @@ impl ShowcaseRegistry {
         manifest
     }
 
+    /// Returns the number of registered stories.
     pub fn story_count(&self) -> usize {
         self.stories.len()
     }
 }
 
+/// Builds a nested navigation tree from slash-delimited story titles.
 pub fn build_story_navigation<T: StoryTreeEntry>(stories: &[T]) -> Vec<StoryNavigationNode> {
     let mut nodes = Vec::new();
 
@@ -66,10 +72,12 @@ pub fn build_story_navigation<T: StoryTreeEntry>(stories: &[T]) -> Vec<StoryNavi
     nodes
 }
 
+/// Splits a story title into non-empty trimmed path segments.
 fn split_story_title(title: &str) -> Vec<&str> {
     title.split('/').map(str::trim).filter(|segment| !segment.is_empty()).collect()
 }
 
+/// Inserts a top-level story node into the navigation tree.
 fn insert_story_node(nodes: &mut Vec<StoryNavigationNode>, segments: &[&str], story_id: &str) {
     let segment = segments[0];
     let node_index = match nodes.iter().position(|node| node.segment == segment) {
@@ -95,6 +103,7 @@ fn insert_story_node(nodes: &mut Vec<StoryNavigationNode>, segments: &[&str], st
     insert_story_child(&mut node.children, &node.title_path, &segments[1..], story_id);
 }
 
+/// Inserts nested child segments below an existing navigation node.
 fn insert_story_child(
     children: &mut Vec<StoryNavigationNode>,
     parent_path: &str,
@@ -126,10 +135,12 @@ fn insert_story_child(
 }
 
 impl StoryTreeEntry for StoryEntry {
+    /// Returns the id stored in the entry definition.
     fn story_id(&self) -> &str {
         &self.definition.id
     }
 
+    /// Returns the title stored in the entry definition.
     fn story_title(&self) -> &str {
         &self.definition.title
     }
@@ -139,10 +150,12 @@ impl<T> StoryTreeEntry for &T
 where
     T: StoryTreeEntry + ?Sized,
 {
+    /// Forwards the story id lookup through a shared reference.
     fn story_id(&self) -> &str {
         (*self).story_id()
     }
 
+    /// Forwards the story title lookup through a shared reference.
     fn story_title(&self) -> &str {
         (*self).story_title()
     }

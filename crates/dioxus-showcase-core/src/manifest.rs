@@ -17,14 +17,17 @@ pub struct StoryManifest {
 }
 
 impl StoryManifest {
+    /// Creates an empty manifest using the provided schema version.
     pub fn new(schema_version: u32) -> Self {
         Self { schema_version, stories: Vec::new() }
     }
 
+    /// Appends a discovered story definition to the manifest.
     pub fn add_story(&mut self, story: StoryDefinition) {
         self.stories.push(story);
     }
 
+    /// Serializes the manifest to compact JSON for artifact output.
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).expect("story manifest serialization should not fail")
     }

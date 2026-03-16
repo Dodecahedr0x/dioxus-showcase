@@ -21,6 +21,7 @@ use crate::{
     scaffold::{showcase_app_dir, write_artifacts},
 };
 
+/// Runs the build command and optionally enters artifact watch mode.
 pub fn cmd_build(args: BuildArgs) -> Result<(), String> {
     let config = load_config()?;
     let component_count = rebuild_showcase_artifacts(&config)?;
@@ -45,6 +46,7 @@ pub fn cmd_build(args: BuildArgs) -> Result<(), String> {
     Ok(())
 }
 
+/// Re-discovers stories/providers and rewrites all generated showcase artifacts.
 pub fn rebuild_showcase_artifacts(config: &ShowcaseConfig) -> Result<usize, String> {
     let mut components = discover_components(Path::new("."), config)?;
     let providers = discover_providers(Path::new("."), config)?;
@@ -54,6 +56,7 @@ pub fn rebuild_showcase_artifacts(config: &ShowcaseConfig) -> Result<usize, Stri
     Ok(components.len())
 }
 
+/// Polls source timestamps and rebuilds artifacts whenever the newest file changes.
 pub fn watch_and_rebuild(config: ShowcaseConfig, stop: Arc<AtomicBool>) {
     let mut last_stamp = latest_source_stamp(&config).ok().flatten();
 
@@ -77,6 +80,7 @@ pub fn watch_and_rebuild(config: ShowcaseConfig, stop: Arc<AtomicBool>) {
     }
 }
 
+/// Returns the latest modification time across discovered sources and the config file.
 fn latest_source_stamp(config: &ShowcaseConfig) -> Result<Option<SystemTime>, String> {
     let mut files = discover_component_source_files(Path::new("."), config)?;
     files.push(PathBuf::from("DioxusShowcase.toml"));

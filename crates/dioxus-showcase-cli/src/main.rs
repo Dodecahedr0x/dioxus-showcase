@@ -11,6 +11,7 @@ use clap::{CommandFactory, Parser};
 
 use crate::cli::Cli;
 
+/// Starts the CLI process and exits non-zero when command execution fails.
 fn main() {
     if let Err(err) = run() {
         eprintln!("error: {err}");
@@ -18,6 +19,7 @@ fn main() {
     }
 }
 
+/// Parses arguments, prints help when needed, and dispatches to the command layer.
 fn run() -> Result<(), String> {
     let cli = Cli::parse();
     if cli.command.is_none() {

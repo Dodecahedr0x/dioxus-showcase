@@ -7,6 +7,7 @@ use crate::utils::{
     slugify_title, story_arg_bindings,
 };
 
+/// Expands `#[showcase]` into generated renderer, factory, and story constructor helpers.
 pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
     let showcase_meta = match parse_showcase_meta(attr) {
         Ok(meta) => meta,

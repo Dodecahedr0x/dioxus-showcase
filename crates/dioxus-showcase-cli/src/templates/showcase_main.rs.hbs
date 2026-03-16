@@ -3,15 +3,18 @@ use std::collections::BTreeSet;
 
 mod generated;
 
+/// Launches the generated showcase application.
 fn main() {
     launch(App);
 }
 
 impl dioxus_showcase::core::StoryTreeEntry for generated::ShowcaseComponentDefinition {
+    /// Returns the route id for the generated component definition.
     fn story_id(&self) -> &str {
         &self.id
     }
 
+    /// Returns the title used to place the story in the sidebar tree.
     fn story_title(&self) -> &str {
         &self.title
     }
@@ -36,6 +39,7 @@ enum ThemeMode {
 }
 
 impl ThemeMode {
+    /// Returns the serialized theme token used in the shell DOM.
     fn as_str(self) -> &'static str {
         match self {
             Self::Light => "light",
@@ -43,6 +47,7 @@ impl ThemeMode {
         }
     }
 
+    /// Switches between light and dark theme modes.
     fn toggle(self) -> Self {
         match self {
             Self::Light => Self::Dark,
@@ -50,6 +55,7 @@ impl ThemeMode {
         }
     }
 
+    /// Returns the label shown by the theme toggle control.
     fn label(self) -> &'static str {
         match self {
             Self::Light => "Light",
@@ -58,6 +64,7 @@ impl ThemeMode {
     }
 }
 
+/// Root application component for the generated showcase shell.
 #[component]
 fn App() -> Element {
     use_context_provider(|| Signal::new(None::<String>));
@@ -74,6 +81,7 @@ fn App() -> Element {
     }
 }
 
+/// Builds the filtered sidebar navigation tree for the currently selected tag.
 fn showcase_navigation(
     selected_tag: Option<&str>,
 ) -> Vec<dioxus_showcase::core::StoryNavigationNode> {
@@ -89,6 +97,7 @@ fn showcase_navigation(
     dioxus_showcase::core::build_story_navigation(&filtered)
 }
 
+/// Collects all distinct story tags exposed by the generated stories.
 fn showcase_tags() -> Vec<String> {
     let mut tags = BTreeSet::new();
     for component in generated::showcase_components() {
@@ -99,6 +108,7 @@ fn showcase_tags() -> Vec<String> {
     tags.into_iter().collect()
 }
 
+/// Returns `true` when a navigation node contains the active story somewhere below it.
 fn node_contains_active_story(
     node: &dioxus_showcase::core::StoryNavigationNode,
     active_id: Option<&str>,
@@ -107,6 +117,7 @@ fn node_contains_active_story(
         || node.children.iter().any(|child| node_contains_active_story(child, active_id))
 }
 
+/// Renders the showcase sidebar with theme controls, tag filters, and story navigation.
 #[component]
 fn Sidebar(active_id: Option<String>) -> Element {
     let mut selected_tag = use_context::<Signal<Option<String>>>();
@@ -171,6 +182,7 @@ fn Sidebar(active_id: Option<String>) -> Element {
     }
 }
 
+/// Renders one level of the story navigation tree.
 #[component]
 fn StoryTree(
     nodes: Vec<dioxus_showcase::core::StoryNavigationNode>,
@@ -185,6 +197,7 @@ fn StoryTree(
     }
 }
 
+/// Renders a single navigation node as either a leaf link or collapsible branch.
 #[component]
 fn StoryTreeNode(
     node: dioxus_showcase::core::StoryNavigationNode,
@@ -224,6 +237,7 @@ fn StoryTreeNode(
     }
 }
 
+/// Home route shown when no story has been selected yet.
 #[component]
 fn Home() -> Element {
     rsx! {
@@ -237,6 +251,7 @@ fn Home() -> Element {
     }
 }
 
+/// Story route that looks up a generated story by id and renders its canvas.
 #[component]
 fn Component(id: String) -> Element {
     let components = generated::showcase_components();
@@ -281,6 +296,7 @@ fn Component(id: String) -> Element {
     }
 }
 
+/// Wraps story rendering in an error boundary so the shell survives story failures.
 fn story_canvas(component: generated::ShowcaseComponentDefinition) -> Element {
     rsx! {
         ErrorBoundary {
@@ -305,6 +321,7 @@ fn story_canvas(component: generated::ShowcaseComponentDefinition) -> Element {
     }
 }
 
+/// Fallback route component for unknown paths.
 #[component]
 fn NotFound(route: Vec<String>) -> Element {
     let attempted = if route.is_empty() {

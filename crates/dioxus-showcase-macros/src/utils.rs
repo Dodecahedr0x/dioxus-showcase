@@ -2,6 +2,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{parse::Parser, ExprPath, FnArg, Meta, Type};
 
+/// Returns `true` when the function signature is a single aggregate `props` argument.
 pub fn is_single_props_argument(
     inputs: &syn::punctuated::Punctuated<FnArg, syn::Token![,]>,
 ) -> bool {
@@ -26,6 +27,7 @@ pub struct StoryArgBindings {
     pub has_controls: bool,
 }
 
+/// Converts a function signature into bindings, render args, props syntax, and optional controls.
 pub fn story_arg_bindings(
     inputs: &syn::punctuated::Punctuated<FnArg, syn::Token![,]>,
 ) -> Result<StoryArgBindings, String> {
@@ -68,6 +70,7 @@ pub fn story_arg_bindings(
     Ok(StoryArgBindings { state_bindings, render_args, component_props, controls, has_controls })
 }
 
+/// Renders a hidden Dioxus component that hosts the preview and any generated controls.
 pub fn render_controlled_story_component(
     controls_component_name: &syn::Ident,
     bindings: StoryArgBindings,
@@ -98,6 +101,7 @@ pub fn render_controlled_story_component(
     }
 }
 
+/// Wraps preview content in the common showcase frame markup.
 pub fn render_story_frame(preview: TokenStream2) -> TokenStream2 {
     quote! {
         div { class: "story-preview",
@@ -110,6 +114,7 @@ pub fn render_story_frame(preview: TokenStream2) -> TokenStream2 {
     }
 }
 
+/// Emits a control widget for supported interactive parameter types.
 fn render_story_control(ident: &syn::Ident, ty: &Type) -> Option<TokenStream2> {
     let name = ident.to_string();
 
@@ -162,6 +167,7 @@ fn render_story_control(ident: &syn::Ident, ty: &Type) -> Option<TokenStream2> {
     None
 }
 
+/// Checks whether a type path ends with a specific identifier.
 fn is_type_ident(ty: &Type, expected: &str) -> bool {
     let Type::Path(type_path) = ty else {
         return false;
@@ -171,6 +177,7 @@ fn is_type_ident(ty: &Type, expected: &str) -> bool {
         && type_path.path.segments.last().is_some_and(|segment| segment.ident == expected)
 }
 
+/// Returns `true` when the type is one of the supported numeric control types.
 fn is_numeric_type(ty: &Type) -> bool {
     [
         "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize",
@@ -189,6 +196,7 @@ pub struct ShowcaseMeta {
     pub index: Option<i32>,
 }
 
+/// Parses supported macro metadata keys shared by story, showcase, and provider attributes.
 pub fn parse_showcase_meta(attr: TokenStream2) -> Result<ShowcaseMeta, String> {
     let metas = syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated
         .parse2(attr)
@@ -255,6 +263,7 @@ pub fn parse_showcase_meta(attr: TokenStream2) -> Result<ShowcaseMeta, String> {
     Ok(out)
 }
 
+/// Extracts the last path segment from a component path expression.
 fn component_name_from_path(expr_path: &ExprPath) -> Result<String, String> {
     expr_path
         .path
@@ -264,6 +273,7 @@ fn component_name_from_path(expr_path: &ExprPath) -> Result<String, String> {
         .ok_or_else(|| "showcase component path must not be empty".to_owned())
 }
 
+/// Parses the `tags = ["..."]` array into owned strings.
 fn parse_tags_array(array: &syn::ExprArray) -> Result<Vec<String>, String> {
     array
         .elems
@@ -280,6 +290,7 @@ fn parse_tags_array(array: &syn::ExprArray) -> Result<Vec<String>, String> {
         .collect()
 }
 
+/// Normalizes a title into the slug format used by generated story ids.
 pub fn slugify_title(title: &str) -> String {
     let mut out = String::with_capacity(title.len());
     let mut prev_dash = false;

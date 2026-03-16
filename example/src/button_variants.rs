@@ -3,6 +3,7 @@ use dioxus_showcase::prelude::*;
 
 #[provider(index = 0)]
 #[component]
+/// Wraps every example story in a simple padded shell.
 pub fn ExampleStoryShell(children: Element) -> Element {
     rsx! {
         div {
@@ -15,6 +16,7 @@ pub fn ExampleStoryShell(children: Element) -> Element {
 /// Interactive component discovered via `#[showcase]`.
 #[showcase(tags = ["examples", "workspace"])]
 #[component]
+/// Demonstrates a component discovered from a normal workspace member crate.
 pub fn PillButtonControllable(label: String, disabled: bool) -> Element {
     let border = if disabled { "#cbd5e1" } else { "#0f766e" };
     let background = if disabled { "#ffffff" } else { "#0f766e" };
@@ -43,6 +45,7 @@ pub fn PillButtonControllable(label: String, disabled: bool) -> Element {
 
 /// Story state defined as a plain function with an optional control parameter.
 #[story(title = "PillButtonControllable/Primary", tags = ["examples", "workspace"])]
+/// Renders the primary state for the pill button story.
 pub fn pill_button_primary(label: String) -> Element {
     let label = if label.is_empty() { "Save Changes".to_string() } else { label };
 
@@ -53,6 +56,7 @@ pub fn pill_button_primary(label: String) -> Element {
 
 /// Another fixed story state defined without wrapping it as a component.
 #[story(title = "PillButtonControllable/Disabled", tags = ["examples", "workspace"])]
+/// Renders a fixed disabled state for the pill button story.
 pub fn pill_button_disabled() -> Element {
     rsx! {
         PillButtonControllable { label: "Unavailable".to_string(), disabled: true }

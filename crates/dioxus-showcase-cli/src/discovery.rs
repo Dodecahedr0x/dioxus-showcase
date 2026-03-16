@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition};
 use syn::{Attribute, Item};
 
+/// Discovers all story definitions reachable from the configured entry crate.
 pub fn discover_components(
     root: &Path,
     config: &ShowcaseConfig,
@@ -18,6 +19,7 @@ pub fn discover_components(
     Ok(components)
 }
 
+/// Discovers all provider definitions reachable from the configured entry crate.
 pub fn discover_providers(
     root: &Path,
     config: &ShowcaseConfig,
@@ -33,6 +35,7 @@ pub fn discover_providers(
     Ok(providers)
 }
 
+/// Returns the Rust source files reachable from the entry crate root modules.
 pub fn discover_component_source_files(
     root: &Path,
     config: &ShowcaseConfig,
@@ -48,6 +51,7 @@ pub fn discover_component_source_files(
     Ok(files)
 }
 
+/// Ensures no two discovered stories would claim the same route id.
 pub fn validate_component_ids(stories: &[StoryDefinition]) -> Result<(), String> {
     let mut seen = std::collections::HashSet::new();
     for story in stories {
@@ -61,6 +65,7 @@ pub fn validate_component_ids(stories: &[StoryDefinition]) -> Result<(), String>
     Ok(())
 }
 
+/// Resolves the configured entry crate `src/` directory.
 fn entry_crate_src_dir(root: &Path, config: &ShowcaseConfig) -> Result<PathBuf, String> {
     let entry_crate_dir = root.join(&config.project.entry_crate);
     if !entry_crate_dir.exists() {
@@ -81,6 +86,7 @@ fn entry_crate_src_dir(root: &Path, config: &ShowcaseConfig) -> Result<PathBuf, 
     Ok(src_dir)
 }
 
+/// Returns the entry crate root files that can seed discovery traversal.
 fn discover_crate_root_files(entry_src_dir: &Path) -> Vec<PathBuf> {
     ["lib.rs", "main.rs"]
         .into_iter()
@@ -89,6 +95,7 @@ fn discover_crate_root_files(entry_src_dir: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Recursively follows reachable external modules and collects Rust source files once each.
 fn collect_reachable_rust_files(
     path: &Path,
     visited: &mut std::collections::BTreeSet<PathBuf>,
@@ -119,10 +126,12 @@ fn collect_reachable_rust_files(
     Ok(())
 }
 
+/// Checks whether a path ends with the `.rs` extension.
 fn is_rust_source_file(path: &Path) -> bool {
     path.extension().and_then(std::ffi::OsStr::to_str).is_some_and(|ext| ext == "rs")
 }
 
+/// Extracts story definitions from one Rust source file.
 fn discover_components_in_file(
     entry_src_dir: &Path,
     path: &Path,
@@ -138,6 +147,7 @@ fn discover_components_in_file(
     Ok(stories)
 }
 
+/// Extracts provider definitions from one Rust source file.
 fn discover_providers_in_file(
     entry_src_dir: &Path,
     path: &Path,
@@ -160,6 +170,7 @@ fn discover_providers_in_file(
     Ok(providers)
 }
 
+/// Finds file-backed nested modules declared by `mod foo;`.
 fn discover_external_module_files(path: &Path, items: &[Item]) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
 
@@ -178,6 +189,7 @@ fn discover_external_module_files(path: &Path, items: &[Item]) -> Result<Vec<Pat
     Ok(files)
 }
 
+/// Walks parsed items recursively and appends discovered story definitions.
 fn collect_stories_from_items(
     entry_src_dir: &Path,
     file_path: &Path,
@@ -234,6 +246,7 @@ fn collect_stories_from_items(
     Ok(())
 }
 
+/// Walks parsed items recursively and appends discovered provider definitions.
 fn collect_providers_from_items(
     entry_src_dir: &Path,
     file_path: &Path,
@@ -287,6 +300,7 @@ fn collect_providers_from_items(
     Ok(())
 }
 
+/// Returns the first story-producing attribute on a function, if any.
 fn find_story_attribute(attrs: &[Attribute]) -> Option<&Attribute> {
     attrs.iter().find(|attr| {
         attr.path()
@@ -296,12 +310,14 @@ fn find_story_attribute(attrs: &[Attribute]) -> Option<&Attribute> {
     })
 }
 
+/// Returns the provider attribute on a function, if present.
 fn find_provider_attribute(attrs: &[Attribute]) -> Option<&Attribute> {
     attrs
         .iter()
         .find(|attr| attr.path().segments.last().is_some_and(|segment| segment.ident == "provider"))
 }
 
+/// Resolves a `mod` declaration to its backing source file.
 fn resolve_external_module_path(
     current_file: &Path,
     item_mod: &syn::ItemMod,
@@ -339,6 +355,7 @@ fn resolve_external_module_path(
     ))
 }
 
+/// Determines the directory Rust will search for sibling module files.
 fn external_module_search_dir(current_file: &Path) -> Result<PathBuf, String> {
     let parent = current_file.parent().ok_or_else(|| {
         format!("failed to resolve parent directory for module source {}", current_file.display())
@@ -354,6 +371,7 @@ fn external_module_search_dir(current_file: &Path) -> Result<PathBuf, String> {
     })
 }
 
+/// Reads a `#[path = \"...\"]` override from a module declaration, if one exists.
 fn module_path_override(attrs: &[Attribute]) -> Result<Option<String>, String> {
     for attr in attrs {
         if !attr.path().is_ident("path") {
@@ -382,6 +400,7 @@ struct ShowcaseAttrMeta {
     index: Option<i32>,
 }
 
+/// Parses the supported `#[showcase(...)]` and `#[story(...)]` metadata fields.
 fn parse_showcase_component_attribute(
     attribute: &Attribute,
     path: &Path,
@@ -439,6 +458,7 @@ fn parse_showcase_component_attribute(
     Ok(ShowcaseAttrMeta { title, tags, index: None })
 }
 
+/// Parses `#[provider(index = ...)]` metadata.
 fn parse_provider_attribute(
     attribute: &Attribute,
     path: &Path,
@@ -463,6 +483,7 @@ fn parse_provider_attribute(
     Ok(ShowcaseAttrMeta { title: None, tags: Vec::new(), index })
 }
 
+/// Extracts the final identifier from a component path expression.
 fn component_name_from_path(expr_path: &syn::ExprPath) -> Result<String, String> {
     expr_path
         .path
@@ -472,6 +493,7 @@ fn component_name_from_path(expr_path: &syn::ExprPath) -> Result<String, String>
         .ok_or_else(|| "component path must not be empty".to_owned())
 }
 
+/// Parses a tags expression into owned strings while enforcing string literals.
 fn parse_tags_array(expr: &syn::Expr) -> Result<Vec<String>, syn::Error> {
     let array = match expr {
         syn::Expr::Array(array) => array,
@@ -511,12 +533,14 @@ fn parse_tags_array(expr: &syn::Expr) -> Result<Vec<String>, syn::Error> {
         .collect()
 }
 
+/// Converts a source path into an absolute canonical string for manifest output.
 fn canonical_source_path(path: &Path) -> Result<String, String> {
     path.canonicalize().map(|absolute| absolute.display().to_string()).map_err(|err| {
         format!("failed to canonicalize showcase source path {}: {err}", path.display())
     })
 }
 
+/// Builds the Rust module path for one discovered item.
 fn render_module_path(
     entry_src_dir: &Path,
     path: &Path,
@@ -527,6 +551,7 @@ fn render_module_path(
     Ok(segments.join("::"))
 }
 
+/// Derives the module prefix implied by a source file's location under `src/`.
 fn module_prefix_from_path(entry_src_dir: &Path, path: &Path) -> Result<Vec<String>, String> {
     let relative = path.strip_prefix(entry_src_dir).map_err(|err| {
         format!(
@@ -556,18 +581,22 @@ fn module_prefix_from_path(entry_src_dir: &Path, path: &Path) -> Result<Vec<Stri
     Ok(segments)
 }
 
+/// Returns the generated renderer helper name for a discovered component or story.
 fn showcase_renderer_symbol(component_name: &str) -> String {
     format!("__dioxus_showcase_render__{component_name}")
 }
 
+/// Returns the generated provider wrapper helper name.
 fn showcase_provider_symbol(component_name: &str) -> String {
     format!("__dioxus_showcase_wrap__{component_name}")
 }
 
+/// Converts a generated renderer helper name into its story-constructor helper name.
 pub fn showcase_story_symbol(renderer_symbol: &str) -> String {
     renderer_symbol.replacen("__dioxus_showcase_render__", "__dioxus_showcase_story__", 1)
 }
 
+/// Normalizes a title into the route id format used by generated stories.
 pub fn slugify_title(title: &str) -> String {
     let mut out = String::with_capacity(title.len());
     let mut prev_dash = false;

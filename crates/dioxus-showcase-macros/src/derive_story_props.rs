@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
+/// Expands `#[derive(StoryProps)]` into `StoryArg` and `StoryProps` impls backed by `Default`.
 pub fn expand(input: TokenStream2) -> TokenStream2 {
     let item: syn::DeriveInput = match syn::parse2(input) {
         Ok(item) => item,

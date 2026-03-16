@@ -1,51 +1,45 @@
-# Workspace Member Showcase Example
+# Example Workspace Member
 
-This crate is a fully valid Cargo workspace member that includes Dioxus showcase component annotations.
+This crate is the smallest end-to-end demo of the current `dioxus-showcase` API.
 
-## Why this exists
+It exists to prove that the pipeline works against an ordinary workspace member, not a special-case demo app. The CLI discovers the annotated code here, the macros generate helper symbols next to it, and the generated showcase shell imports those helpers back out of the crate.
 
-It demonstrates a project layout where annotated components live inside the workspace member source tree.
+## What It Shows
 
-## Files
+- `#[provider(index = 0)]` for a shared story wrapper.
+- `#[showcase(...)]` on a multi-arg Dioxus component.
+- `#[story(...)]` on named story functions.
+- test coverage that calls the generated constructor functions directly.
 
-- `src/button_variants.rs`: annotated `#[showcase]` components and `#[story]` functions discovered by `dioxus-showcase`
-- `#[provider]` components wrap every story with shared layout or context
-- `src/lib.rs`: crate-level docs and exported module wiring
+## Key File
 
-## Defining stories
-
-Use `#[showcase]` for an interactive component surface and `#[story]` for fixed named states:
+- `src/button_variants.rs`
 
 ```rust
+#[provider(index = 0)]
+#[component]
+pub fn ExampleStoryShell(children: Element) -> Element {
+    rsx! {
+        div {
+            style: "padding: 24px; background: #f8fafc; border-radius: 18px;",
+            {children}
+        }
+    }
+}
+
 #[showcase(tags = ["examples", "workspace"])]
 #[component]
 pub fn PillButtonControllable(label: String, disabled: bool) -> Element {
     rsx! { button { disabled: disabled, "{label}" } }
 }
 
-#[story(component = PillButtonControllable, name = "Primary")]
-pub fn pill_button_primary() -> Element {
-    rsx! { PillButtonControllable { label: "Save Changes".to_string(), disabled: false } }
+#[story(title = "PillButtonControllable/Primary", tags = ["examples", "workspace"])]
+pub fn pill_button_primary(label: String) -> Element {
+    rsx! { PillButtonControllable { label, disabled: false } }
 }
 ```
 
-Wrap all stories in a shared provider component:
-
-```rust
-#[provider(index = 0)]
-#[component]
-fn StoryShell(children: Element) -> Element {
-    rsx! {
-        div { class: "shell", {children} }
-    }
-}
-```
-
-Lower `index` values wrap first, so `index = 0` becomes the outermost provider.
-
-## Run with dioxus-showcase
-
-Run these commands from the repository root (`dioxus-preview/`):
+## Run It From Repo Root
 
 ```bash
 cargo run -p dioxus-showcase-cli -- check
@@ -53,7 +47,7 @@ cargo run -p dioxus-showcase-cli -- build
 cargo run -p dioxus-showcase-cli -- dev
 ```
 
-Notes:
+## Read More
 
-- The CLI scans `.rs` files recursively and discovers `#[showcase(...)]` and `#[story(...)]`.
-- Running from root will pick up annotated components from workspace members.
+- Full reference: [`../docs/code-reference.md`](../docs/code-reference.md)
+- Top-level overview: [`../README.md`](../README.md)

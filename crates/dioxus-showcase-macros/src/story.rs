@@ -6,6 +6,7 @@ use crate::utils::{
     story_arg_bindings,
 };
 
+/// Expands `#[story]` into generated renderer, factory, and story constructor helpers.
 pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
     let story_meta = match parse_showcase_meta(attr) {
         Ok(meta) => meta,
@@ -117,6 +118,7 @@ pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
     }
 }
 
+/// Resolves the final story title, preserving the current title-only public API.
 fn derive_story_title(
     story_meta: &crate::utils::ShowcaseMeta,
     fallback_story_name: &str,

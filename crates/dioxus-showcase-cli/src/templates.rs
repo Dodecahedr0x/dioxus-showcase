@@ -49,6 +49,7 @@ struct MainTemplateContext {
     stylesheets: Vec<String>,
 }
 
+/// Renders the generated runtime module that imports all discovered story constructors.
 pub fn render_generated_runtime_rs(
     stories: &[StoryDefinition],
     providers: &[ProviderDefinition],
@@ -75,6 +76,7 @@ pub fn render_generated_runtime_rs(
     )
 }
 
+/// Renders the showcase shell application's `main.rs`.
 pub fn render_showcase_app_main_rs(
     _base_path: &str,
     stylesheets: &[String],
@@ -91,6 +93,7 @@ pub fn render_showcase_app_main_rs(
     )
 }
 
+/// Renders the generated showcase app `Cargo.toml`.
 pub fn render_showcase_app_cargo_toml(config: &ShowcaseConfig) -> Result<String, String> {
     let package_name = slugify_title(&format!("{}-showcase", config.project.name));
     let entry_crate_package_name = discover_entry_crate_package_name(config)?;
@@ -110,15 +113,18 @@ pub fn render_showcase_app_cargo_toml(config: &ShowcaseConfig) -> Result<String,
     )
 }
 
+/// Renders the generated showcase app `Dioxus.toml`.
 pub fn render_showcase_app_dioxus_toml(config: &ShowcaseConfig) -> Result<String, String> {
     let app_name = escape_toml_string(&format!("{} showcase", config.project.name));
     render_template(SHOWCASE_DIOXUS_TEMPLATE, &DioxusTemplateContext { app_name })
 }
 
+/// Returns the static CSS used by the generated showcase shell.
 pub fn render_showcase_app_css() -> &'static str {
     SHOWCASE_APP_CSS_TEMPLATE
 }
 
+/// Renders a Handlebars template with pre-escaped context values.
 fn render_template<T: Serialize>(template: &str, context: &T) -> Result<String, String> {
     let mut handlebars = Handlebars::new();
     handlebars.register_escape_fn(no_escape);
@@ -127,6 +133,7 @@ fn render_template<T: Serialize>(template: &str, context: &T) -> Result<String, 
         .map_err(|err| format!("failed to render template: {err}"))
 }
 
+/// Builds the fully qualified path to a generated story constructor in the entry crate.
 fn render_story_path(entry_crate_alias: &str, module_path: &str, renderer_symbol: &str) -> String {
     let story_symbol = showcase_story_symbol(renderer_symbol);
     let mut segments: Vec<&str> =
@@ -139,6 +146,7 @@ fn render_story_path(entry_crate_alias: &str, module_path: &str, renderer_symbol
     format!("{entry_crate_alias}::{}", segments.join("::"))
 }
 
+/// Builds fully qualified provider wrapper paths ordered by provider index.
 fn render_provider_paths(entry_crate_alias: &str, providers: &[ProviderDefinition]) -> Vec<String> {
     let mut ordered = providers.to_vec();
     ordered.sort_by_key(|provider| provider.index);
@@ -150,6 +158,7 @@ fn render_provider_paths(entry_crate_alias: &str, providers: &[ProviderDefinitio
         .collect()
 }
 
+/// Builds the fully qualified path to a provider wrapper function in the entry crate.
 fn render_provider_path(entry_crate_alias: &str, module_path: &str, wrap_symbol: &str) -> String {
     let mut segments: Vec<&str> =
         module_path.split("::").filter(|segment| !segment.is_empty()).collect();
@@ -161,6 +170,7 @@ fn render_provider_path(entry_crate_alias: &str, module_path: &str, wrap_symbol:
     format!("{entry_crate_alias}::{}", segments.join("::"))
 }
 
+/// Reads the configured entry crate package name from its `Cargo.toml`.
 fn discover_entry_crate_package_name(config: &ShowcaseConfig) -> Result<String, String> {
     let cargo_toml_path = Path::new(&config.project.entry_crate).join("Cargo.toml");
     let content = fs::read_to_string(&cargo_toml_path)
@@ -194,6 +204,7 @@ fn discover_entry_crate_package_name(config: &ShowcaseConfig) -> Result<String, 
     package_name.ok_or_else(|| format!("missing [package].name in {}", cargo_toml_path.display()))
 }
 
+/// Parses a bare TOML string literal value from a `key = "value"` line.
 fn parse_toml_string(value: &str) -> Result<String, String> {
     if !(value.starts_with('"') && value.ends_with('"')) {
         return Err(format!("expected quoted string, got {value}"));
@@ -201,6 +212,7 @@ fn parse_toml_string(value: &str) -> Result<String, String> {
     Ok(value[1..value.len() - 1].to_owned())
 }
 
+/// Computes a relative dependency path from the generated showcase app to the entry crate.
 fn relative_dependency_path(from_dir: &Path, to_dir: &Path) -> Result<String, String> {
     let from_components: Vec<Component<'_>> = from_dir.components().collect();
     let to_components: Vec<Component<'_>> = to_dir.components().collect();
@@ -228,14 +240,17 @@ fn relative_dependency_path(from_dir: &Path, to_dir: &Path) -> Result<String, St
     })
 }
 
+/// Mirrors `scaffold::showcase_app_dir` for template rendering helpers.
 fn showcase_app_dir(config: &ShowcaseConfig) -> PathBuf {
     PathBuf::from(&config.project.showcase_crate)
 }
 
+/// Escapes a string for inclusion in generated TOML source.
 fn escape_toml_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Escapes a string for inclusion in generated Rust source.
 fn escape_rust_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }

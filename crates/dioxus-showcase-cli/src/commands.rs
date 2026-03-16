@@ -14,6 +14,7 @@ use crate::dev::cmd_dev;
 use crate::scaffold::ensure_showcase_app_scaffold;
 use crate::scaffold::showcase_app_dir;
 
+/// Dispatches the parsed CLI subcommand.
 pub fn run(command: Option<Command>) -> Result<(), String> {
     match command {
         Some(Command::Init) => cmd_init(),
@@ -30,6 +31,7 @@ pub fn run(command: Option<Command>) -> Result<(), String> {
     }
 }
 
+/// Loads `DioxusShowcase.toml` from the current working directory.
 pub fn load_config() -> Result<ShowcaseConfig, String> {
     let config_path = Path::new("DioxusShowcase.toml");
     if !config_path.exists() {
@@ -38,6 +40,7 @@ pub fn load_config() -> Result<ShowcaseConfig, String> {
     ShowcaseConfig::from_toml_file(config_path)
 }
 
+/// Prompts for config values, writes the config file, and scaffolds the showcase app.
 pub fn cmd_init() -> Result<(), String> {
     let existing = load_config().ok();
     let config = prompt_for_config(existing)?;
@@ -55,6 +58,7 @@ pub fn cmd_init() -> Result<(), String> {
     Ok(())
 }
 
+/// Builds the config interactively, seeding prompts from existing values when available.
 fn prompt_for_config(existing: Option<ShowcaseConfig>) -> Result<ShowcaseConfig, String> {
     let cwd_name = env::current_dir()
         .ok()
@@ -91,6 +95,7 @@ fn prompt_for_config(existing: Option<ShowcaseConfig>) -> Result<ShowcaseConfig,
     })
 }
 
+/// Chooses a likely entry crate path when bootstrapping a new config.
 fn default_entry_crate() -> String {
     if Path::new("src").exists() && Path::new("Cargo.toml").exists() {
         return ".".to_owned();
@@ -103,6 +108,7 @@ fn default_entry_crate() -> String {
     "web".to_owned()
 }
 
+/// Prompts for one config value, returning the default when the input is empty.
 fn prompt(label: &str, default: &str) -> Result<String, String> {
     print!("- {label} [{default}]: ");
     io::stdout().flush().map_err(|err| format!("failed to flush stdout: {err}"))?;
