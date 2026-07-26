@@ -38,6 +38,8 @@ struct CargoTemplateContext {
 #[derive(Serialize)]
 struct DioxusTemplateContext {
     app_name: String,
+    app_title: String,
+    base_path: String,
 }
 
 #[derive(Serialize)]
@@ -116,7 +118,13 @@ pub fn render_showcase_app_cargo_toml(config: &ShowcaseConfig) -> Result<String,
 /// Renders the generated showcase app `Dioxus.toml`.
 pub fn render_showcase_app_dioxus_toml(config: &ShowcaseConfig) -> Result<String, String> {
     let app_name = escape_toml_string(&format!("{} showcase", config.project.name));
-    render_template(SHOWCASE_DIOXUS_TEMPLATE, &DioxusTemplateContext { app_name })
+    let app_title = escape_toml_string(&format!("{} Showcase", config.project.name));
+    // The Dioxus CLI trims slashes itself, so a root base path renders as an empty string.
+    let base_path = escape_toml_string(config.build.base_path.trim().trim_matches('/'));
+    render_template(
+        SHOWCASE_DIOXUS_TEMPLATE,
+        &DioxusTemplateContext { app_name, app_title, base_path },
+    )
 }
 
 /// Returns the static CSS used by the generated showcase shell.
@@ -352,6 +360,22 @@ mod tests {
         assert!(cargo_toml.contains("path = \"..\""));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn showcase_dioxus_toml_carries_title_and_base_path() {
+        let mut config = ShowcaseConfig::default();
+        config.project.name = "Demo".to_owned();
+        config.build.base_path = "/".to_owned();
+
+        let root = render_showcase_app_dioxus_toml(&config).expect("render dioxus toml");
+        assert!(root.contains("name = \"Demo showcase\""));
+        assert!(root.contains("title = \"Demo Showcase\""));
+        assert!(root.contains("base_path = \"\""));
+
+        config.build.base_path = "/my-repo/".to_owned();
+        let nested = render_showcase_app_dioxus_toml(&config).expect("render dioxus toml");
+        assert!(nested.contains("base_path = \"my-repo\""));
     }
 
     #[test]

@@ -6,6 +6,12 @@ license.workspace = true
 authors.workspace = true
 description = "CLI for developing and validating dioxus-showcase projects."
 
+# All command logic lives in the library so it can be unit tested; the binary is a thin
+# wrapper that maps a failed command to a non-zero exit code.
+[lib]
+name = "dioxus_showcase_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "dioxus-showcase"
 path = "src/main.rs"
