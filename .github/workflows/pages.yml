@@ -118,6 +118,57 @@ jobs:
           echo "--- assembled site ---"
           find _site -maxdepth 2 -name '*.html' | sort
 
+      # GitHub Pages serves the site's ROOT 404.html for every missing path, and ignores
+      # a nested one. Verified against the live site: /showcase/component/<id> returned
+      # mdBook's "Page not found" instead of the showcase, so deep story links died on
+      # refresh — the exact failure `export`'s own 404.html exists to prevent.
+      #
+      # So the book's 404 page gets a prefix check ahead of its own content. On a showcase
+      # path it rewrites the document into the SPA bootstrap; the bundle URL is absolute,
+      # and the app reads location.pathname itself, so the original deep route survives.
+      # Every other 404 falls through to mdBook's page untouched.
+      - name: Teach the root 404 to hand showcase routes to the SPA
+        run: |
+          set -euo pipefail
+          bundle=$(grep -oE 'src="[^"]+\.js"' _site/showcase/index.html | head -1 | sed 's/^src="//; s/"$//')
+          test -n "$bundle"
+          echo "showcase bundle: $bundle"
+          python3 - "$bundle" "${SITE_BASE_PATH}/showcase/" <<'PY'
+          import json, pathlib, sys
+
+          bundle, prefix = sys.argv[1], sys.argv[2]
+          page = pathlib.Path("_site/404.html")
+          html = page.read_text()
+
+          # json.dumps, not %r: Python's repr emits single quotes, which would close the
+          # surrounding JS string literal and produce a syntax error. Both values are
+          # bound to variables and concatenated in, so neither can break out of a quote.
+          # The inner </script> is split so it cannot terminate the outer <script> block.
+          script = """<script>
+          (function () {
+            var PREFIX = %s;
+            var BUNDLE = %s;
+            if (window.location.pathname.indexOf(PREFIX) !== 0) return;
+            document.open();
+            document.write(
+              '<!DOCTYPE html><html><head><meta charset="utf-8">'
+              + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+              + '<title>Showcase</title></head><body><div id="main"></div>'
+              + '<script type="module" async src="' + BUNDLE + '"><\\/scr' + 'ipt>'
+              + '</body></html>'
+            );
+            document.close();
+          })();
+          </script>""" % (json.dumps(prefix), json.dumps(bundle))
+
+          assert "<head>" in html, "mdBook 404.html has no <head> to inject into"
+          page.write_text(html.replace("<head>", "<head>" + script, 1))
+          print("injected showcase dispatch into _site/404.html")
+          PY
+          grep -q "document.open()" _site/404.html
+          # The book's own 404 content must still be there for non-showcase misses.
+          grep -qi "not found" _site/404.html
+
       - name: Upload the Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
