@@ -81,8 +81,11 @@ pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<(), Strin
 
     let main_rs_path = src_dir.join("main.rs");
     if !main_rs_path.exists() {
-        let main_rs =
-            templates::render_showcase_app_main_rs(&config.build.base_path, &stylesheets)?;
+        let main_rs = templates::render_showcase_app_main_rs(
+            &config.build.base_path,
+            &config.project.name,
+            &stylesheets,
+        )?;
         fs::write(&main_rs_path, main_rs)
             .map_err(|err| format!("failed to create {}: {err}", main_rs_path.display()))?;
     }

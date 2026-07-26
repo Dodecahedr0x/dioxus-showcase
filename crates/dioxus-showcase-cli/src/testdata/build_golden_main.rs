@@ -9,6 +9,6 @@ fn main() {
 #[component]
 fn App() -> Element {
     rsx! {
-        dioxus_showcase_ui::ShowcaseApp { base_path: "/" }
+        dioxus_showcase_ui::ShowcaseApp { base_path: "/", title: "Demo Kit" }
     }
 }

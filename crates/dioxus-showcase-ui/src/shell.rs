@@ -21,8 +21,12 @@ pub struct ShowcaseAppProps {
     /// Base path the site is served under, e.g. `"/"` or `"/my-repo"`.
     /// No trailing slash unless it is exactly `"/"`.
     pub base_path: String,
-    /// Browser title / sidebar heading. Defaults to `"Showcase"`.
-    #[props(default)]
+    /// Sidebar heading, normally the name of the package being showcased.
+    /// Defaults to `"Showcase"` when omitted or blank.
+    ///
+    /// `into` so a generated `main.rs` can pass a plain string literal rather than
+    /// `Some("…".to_owned())` — this is a file users read and edit by hand.
+    #[props(default, into)]
     pub title: Option<String>,
 }
 
@@ -36,10 +40,17 @@ pub fn ShowcaseApp(props: ShowcaseAppProps) -> Element {
     // Read once. The registry is fixed at link time, so re-reading it per render
     // would be wasted work and would hand `ShellRoot` a fresh `Rc` every time.
     let shell = use_hook(|| {
-        Shell::from_registry(
-            BasePath::new(&props.base_path),
-            props.title.clone().unwrap_or_else(|| "Showcase".to_owned()),
-        )
+        // A blank title falls back rather than rendering an empty heading: the value
+        // comes from `project.name` in the user's config, which nothing forces to be
+        // non-empty.
+        let title = props
+            .title
+            .clone()
+            .map(|title| title.trim().to_owned())
+            .filter(|title| !title.is_empty())
+            .unwrap_or_else(|| "Showcase".to_owned());
+
+        Shell::from_registry(BasePath::new(&props.base_path), title)
     });
 
     rsx! {

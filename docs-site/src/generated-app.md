@@ -83,7 +83,7 @@ fn main() {
 #[component]
 fn App() -> Element {
     rsx! {
-        dioxus_showcase_ui::ShowcaseApp { base_path: "/" }
+        dioxus_showcase_ui::ShowcaseApp { base_path: "/", title: "acme-ui" }
     }
 }
 ```
@@ -91,3 +91,15 @@ fn App() -> Element {
 `ShowcaseApp` is a compiled component from the `dioxus-showcase-ui` crate. It reads the
 registry itself — it takes no story list, which is why the generated code stays this small.
 Shell improvements reach you through a normal crate version bump rather than a re-scaffold.
+
+`title` is your `project.name`, so the sidebar names the package being showcased rather
+than reading a generic "Showcase". Change it to whatever you like — it is your file. A
+blank title falls back to `"Showcase"`.
+
+Because this file is write-once, a project scaffolded before `title` existed keeps its old
+entry point and still shows the default. Add the argument by hand:
+
+```diff
+-        dioxus_showcase_ui::ShowcaseApp { base_path: "/" }
++        dioxus_showcase_ui::ShowcaseApp { base_path: "/", title: "acme-ui" }
+```

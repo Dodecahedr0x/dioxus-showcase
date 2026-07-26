@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 with no deprecation cycle and no compatibility shims. **This file is the only notice
 you get** — read the whole section for a version before upgrading to it.
 
+## [Unreleased]
+
+### Changed
+
+- **The showcase is titled after the package it belongs to.** The generated
+  `showcase/src/main.rs` now passes `project.name` from `DioxusShowcase.toml` as
+  `ShowcaseApp`'s `title`, so the sidebar heading reads `acme-ui` rather than a generic
+  "Showcase". A blank or whitespace-only name still falls back to `"Showcase"`.
+
+  This matches the browser tab title, which has always been `"<project.name> Showcase"` —
+  the two disagreed until now.
+
+- `ShowcaseAppProps::title` gained `#[props(into)]`, so it accepts a string literal
+  instead of `Some("…".to_owned())`. Additive: existing callers still compile.
+
+### Upgrade notes
+
+`showcase/src/main.rs` is **write-once**, so an existing project keeps its current entry
+point and will still show "Showcase". Add the argument by hand:
+
+```diff
+-        dioxus_showcase_ui::ShowcaseApp { base_path: "/" }
++        dioxus_showcase_ui::ShowcaseApp { base_path: "/", title: "acme-ui" }
+```
+
+Nothing breaks if you skip it — the heading just keeps its old default.
+
 ## [0.1.0] - 2026-07-26
 
 The first alpha. This is the release where the generated showcase app stops being

@@ -171,7 +171,8 @@ in [`docs/static-site.md`](docs/static-site.md).
    app's `src/generated.rs`. It scaffolds `showcase/src/main.rs` only if that file is
    absent.
 3. `dioxus_showcase_ui::ShowcaseApp` — a compiled component from the `dioxus-showcase-ui`
-   crate, not generated code — reads the registry at startup, sorts it deterministically,
+   crate, not generated code — is handed your `project.name` as its `title`, reads the
+   registry at startup, sorts it deterministically,
    builds routes at `/component/:id`, and renders each story in a shell with tag filters,
    tree navigation, and theme switching. Duplicate story ids are reported in a banner
    rather than panicking, and both colliding stories stay navigable.

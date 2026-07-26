@@ -64,6 +64,37 @@ fn the_public_app_renders_against_the_real_registry_without_panicking() {
     assert!(html.contains("No stories are registered"), "{html}");
 }
 
+/// The generated `main.rs` passes `project.name` straight through, and nothing in the
+/// config layer forces that to be non-empty. A blank or whitespace-only name must fall
+/// back to the default rather than render an empty heading.
+#[test]
+fn a_blank_title_falls_back_to_the_default_heading() {
+    for blank in ["", "   "] {
+        let props = ShowcaseAppProps { base_path: "/".to_owned(), title: Some(blank.to_owned()) };
+        let mut dom = VirtualDom::new_with_props(ShowcaseApp, props)
+            .with_root_context(Rc::new(MemoryHistory::default()) as Rc<dyn History>);
+        dom.rebuild_in_place();
+
+        let html = dioxus_ssr::render(&dom);
+
+        assert!(html.contains("Showcase"), "blank title {blank:?} lost the heading: {html}");
+    }
+}
+
+/// A package name reaches the heading through the public prop, which is the path the
+/// generated entry point uses.
+#[test]
+fn the_public_app_titles_itself_after_the_package() {
+    let props = ShowcaseAppProps { base_path: "/".to_owned(), title: Some("acme-ui".to_owned()) };
+    let mut dom = VirtualDom::new_with_props(ShowcaseApp, props)
+        .with_root_context(Rc::new(MemoryHistory::default()) as Rc<dyn History>);
+    dom.rebuild_in_place();
+
+    let html = dioxus_ssr::render(&dom);
+
+    assert!(html.contains("acme-ui"), "{html}");
+}
+
 // --- Duplicate ids (A19: reported, never panicked on) ---
 
 #[test]

@@ -46,7 +46,7 @@ fn App() -> Element {
 {{#each stylesheets}}
         document::Stylesheet { href: asset!("{{this}}") }
 {{/each}}
-        dioxus_showcase_ui::ShowcaseApp { base_path: "{{base_path}}" }
+        dioxus_showcase_ui::ShowcaseApp { base_path: "{{base_path}}", title: "{{title}}" }
     }
 }
 "#;
@@ -75,6 +75,7 @@ struct DioxusTemplateContext {
 struct MainTemplateContext {
     entry_crate: String,
     base_path: String,
+    title: String,
     stylesheets: Vec<String>,
 }
 
@@ -93,10 +94,13 @@ pub fn render_generated_runtime_rs(generation: &str) -> Result<String, String> {
 
 /// Renders the showcase shell application's `main.rs`.
 ///
+/// `title` is the sidebar heading, normally `project.name` from the config, so a
+/// showcase identifies the package it belongs to instead of reading "Showcase".
 /// `stylesheets` are asset URLs relative to the generated app, as collected from the
 /// entry crate's `assets/` directory.
 pub fn render_showcase_app_main_rs(
     base_path: &str,
+    title: &str,
     stylesheets: &[String],
 ) -> Result<String, String> {
     render_template(
@@ -104,6 +108,7 @@ pub fn render_showcase_app_main_rs(
         &MainTemplateContext {
             entry_crate: ENTRY_CRATE_ALIAS.to_owned(),
             base_path: escape_rust_string(&normalize_app_base_path(base_path)),
+            title: escape_rust_string(title.trim()),
             stylesheets: stylesheets.iter().map(|href| escape_rust_string(href)).collect(),
         },
     )
@@ -359,20 +364,21 @@ mod tests {
 
     #[test]
     fn showcase_main_matches_the_golden_entry_point() {
-        let main_rs = render_showcase_app_main_rs("/", &[]).expect("render main");
+        let main_rs = render_showcase_app_main_rs("/", "Demo Kit", &[]).expect("render main");
 
         assert_eq!(main_rs, GOLDEN_MAIN_RS);
     }
 
     #[test]
     fn showcase_main_keeps_the_linkage_line_and_its_warning() {
-        let main_rs = render_showcase_app_main_rs("/", &[]).expect("render main");
+        let main_rs = render_showcase_app_main_rs("/", "Demo Kit", &[]).expect("render main");
 
         // Deleting this line yields an empty showcase with no error at all, so the
         // comment explaining it is as load-bearing as the line itself.
         assert!(main_rs.contains("use showcase_entry as _;"));
         assert!(main_rs.contains("LOAD-BEARING"));
-        assert!(main_rs.contains("dioxus_showcase_ui::ShowcaseApp { base_path: \"/\" }"));
+        assert!(main_rs
+            .contains("dioxus_showcase_ui::ShowcaseApp { base_path: \"/\", title: \"Demo Kit\" }"));
         // The shell reads the registry itself, so the entry point neither declares
         // nor consumes the generated module.
         assert!(!main_rs.contains("mod generated"));
@@ -380,9 +386,37 @@ mod tests {
     }
 
     #[test]
+    fn showcase_main_titles_the_app_after_the_project() {
+        let main_rs =
+            render_showcase_app_main_rs("/", "Acme Design System", &[]).expect("render main");
+
+        assert!(main_rs.contains(r#"title: "Acme Design System""#));
+        // The default the shell falls back to must not be what a configured project ships.
+        assert!(!main_rs.contains(r#"title: "Showcase""#));
+    }
+
+    #[test]
+    fn showcase_main_escapes_a_title_that_would_break_the_string_literal() {
+        // `project.name` is free text from the user's config; an unescaped quote or
+        // backslash here would emit a main.rs that does not compile.
+        let main_rs =
+            render_showcase_app_main_rs("/", r#"Acme "UI" \ Kit"#, &[]).expect("render main");
+
+        assert!(main_rs.contains(r#"title: "Acme \"UI\" \\ Kit""#));
+    }
+
+    #[test]
+    fn showcase_main_trims_a_padded_title() {
+        let main_rs = render_showcase_app_main_rs("/", "  Acme  ", &[]).expect("render main");
+
+        assert!(main_rs.contains(r#"title: "Acme""#));
+    }
+
+    #[test]
     fn showcase_main_links_one_stylesheet_per_discovered_file() {
         let main_rs = render_showcase_app_main_rs(
             "/",
+            "Demo Kit",
             &["/assets/app.css".to_owned(), "/assets/styles/tailwind.css".to_owned()],
         )
         .expect("render main");
@@ -397,16 +431,17 @@ mod tests {
 
     #[test]
     fn showcase_main_normalizes_the_base_path_prop() {
-        let root = render_showcase_app_main_rs("/", &[]).expect("render root");
+        let root = render_showcase_app_main_rs("/", "Demo Kit", &[]).expect("render root");
         assert!(root.contains("base_path: \"/\""));
 
-        let nested = render_showcase_app_main_rs("/my-repo/", &[]).expect("render nested");
+        let nested =
+            render_showcase_app_main_rs("/my-repo/", "Demo Kit", &[]).expect("render nested");
         assert!(nested.contains("base_path: \"/my-repo\""));
 
-        let bare = render_showcase_app_main_rs("my-repo", &[]).expect("render bare");
+        let bare = render_showcase_app_main_rs("my-repo", "Demo Kit", &[]).expect("render bare");
         assert!(bare.contains("base_path: \"/my-repo\""));
 
-        let blank = render_showcase_app_main_rs("   ", &[]).expect("render blank");
+        let blank = render_showcase_app_main_rs("   ", "Demo Kit", &[]).expect("render blank");
         assert!(blank.contains("base_path: \"/\""));
     }
 }
