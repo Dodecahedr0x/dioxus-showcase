@@ -27,6 +27,7 @@ syn = { workspace = true }
 [dev-dependencies]
 dioxus_showcase = { package = "dioxus-showcase", path = "../dioxus-showcase" }
 trybuild = { workspace = true }
+dioxus-ssr = "0.7"
 
 [lints]
 workspace = true

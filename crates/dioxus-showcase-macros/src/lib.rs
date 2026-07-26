@@ -17,6 +17,13 @@ use proc_macro::TokenStream;
 /// named parameters whose types implement `dioxus_showcase::StoryArg`. Basic
 /// scalar parameter types become interactive controls automatically.
 ///
+/// A parameter may carry `#[default = <expression>]` to say what its control
+/// opens on. Without one the control opens on `StoryArg::story_arg()` — `0`,
+/// `false`, `"Lorem Ipsum"` — which exists to be *a* value rather than a
+/// meaningful one, so a story with a documented default has nowhere to say so
+/// and its control reads a number the preview is not rendering. String literals
+/// are widened with `String::from`, so `#[default = "currentColor"]` is enough.
+///
 /// # Example
 ///
 /// ```no_run
@@ -26,6 +33,20 @@ use proc_macro::TokenStream;
 /// #[story(title = "Atoms/Button/Primary")]
 /// fn button_primary() -> Element {
 ///     rsx! { button { "Save" } }
+/// }
+/// ```
+///
+/// Controls that open on the component's own defaults:
+///
+/// ```no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_showcase::prelude::*;
+/// #[story(title = "Atoms/Spinner")]
+/// fn spinner(
+///     #[default = 32.0] size: f64,
+///     #[default = "currentColor"] color: String,
+/// ) -> Element {
+///     rsx! { div { style: "width:{size}px;color:{color}" } }
 /// }
 /// ```
 ///
@@ -51,7 +72,8 @@ pub fn story(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - a single aggregate `props` argument implementing
 ///   `dioxus_showcase::StoryProps`,
 /// - or any number of named parameters whose types implement
-///   `dioxus_showcase::StoryArg`.
+///   `dioxus_showcase::StoryArg`, each of which may carry
+///   `#[default = <expression>]` to set what its control opens on.
 ///
 /// # Example
 ///
