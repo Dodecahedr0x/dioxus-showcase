@@ -1,0 +1,7 @@
+error: `index` was renamed to `order` in 0.1.0: write #[provider(order = <integer>)]. The meaning is unchanged — providers apply in ascending order and the lowest order wraps outermost.
+ --> tests/ui/provider_with_removed_index_arg.rs:6:1
+  |
+6 | #[provider(index = 0)]
+  | ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `provider` (in Nightly builds, run with -Z macro-backtrace for more info)

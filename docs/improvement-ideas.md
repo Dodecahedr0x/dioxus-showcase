@@ -37,21 +37,44 @@ These were the original first wave. They are done, and the table below no longer
   assets left behind by earlier builds.
 - A contributor guide exists at [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
 
+The second wave shipped with `v0.1.0`:
+
+- Stories, providers, and components register themselves at link time through `inventory`,
+  so the CLI no longer emits or re-derives `__dioxus_showcase_*` symbol names. Those names
+  still exist inside the crate that defines a story, but nothing across a crate boundary
+  depends on them.
+- AST discovery is advisory. It powers `check` diagnostics and the manifest only; the
+  runtime reads the registry instead, so discovery drifting from macro behaviour degrades
+  diagnostics rather than breaking the app.
+- `showcase/src/main.rs` is written once, when it is absent, and is never overwritten. The
+  generated app is the user's to edit from that point on.
+- The shell moved out of the CLI's inline template into `dioxus-showcase-ui`, a published
+  crate of real Dioxus components with its own CSS asset and component tests rendered
+  through `dioxus-ssr`.
+- Template upgrades reach new projects only. Because `main.rs` is written once and never
+  migrated, a newer CLI changes what `init` scaffolds and deliberately leaves existing
+  projects alone — there is no migration mechanism, and that is the answer rather than a
+  gap waiting to be filled.
+- The macros have `trybuild` compile-fail coverage for their error paths, running ungated
+  on stable alongside the unit tests over `expand()`.
+- `init`, `check`, `build`, and `export` are covered end to end by on-disk tests against
+  fixture workspaces, not only by golden files.
+- The workspace declares a measured MSRV of `1.85` and complete crates.io metadata
+  (`repository`, `readme`, `keywords`, `categories`, `rust-version`) across all five
+  published crates, and CI enforces the MSRV on every pull request.
+
 ## Backlog
 
 | Area | Improvement idea | Priority | Impact | Difficulty | Global score | Why it matters |
 | --- | --- | --- | --- | --- | --- | --- |
-| Workspace architecture | Define a stable registration contract so the CLI/runtime stops depending on generated symbol naming conventions | P0 | 5 | 4 | 9 | Current discovery and runtime assembly are tightly coupled to macro-generated `__dioxus_showcase_*` symbols and include-style glue. |
 | Workspace architecture | Remove duplicated helpers such as `slugify_title` and metadata parsing by centralizing them in `core` or a dedicated shared crate module | P1 | 4 | 2 | 8 | The same logic exists in the facade, macros, and CLI, increasing the chance of inconsistent IDs and discovery behavior. |
-| Workspace architecture | Add explicit MSRV, compatibility matrix, and release policy in crate metadata and docs | P2 | 3 | 1 | 6 | The RFC promises compatibility management, but the workspace does not yet declare it. |
 | Workspace architecture | Introduce benchmark targets for discovery time, manifest generation, and showcase startup | P2 | 3 | 2 | 5 | The RFC has performance targets, but nothing currently measures them. |
 | `dioxus-showcase-core` config | Add semantic validation for paths, host/base path normalization, and invalid combinations | P1 | 4 | 2 | 8 | Parsing currently succeeds even when the config is semantically unusable. |
 | `dioxus-showcase-core` config | Support layered config sources: file, env vars, and CLI overrides | P2 | 3 | 3 | 4 | This becomes important once the tool is used in CI and multiple environments. |
-| `dioxus-showcase-core` manifest | Add manifest schema evolution support with versioned structs and compatibility tests | P1 | 4 | 3 | 7 | The RFC calls for a stable schema, but the code has only a hard-coded `schema_version = 1`. |
+| `dioxus-showcase-core` manifest | Add manifest schema evolution support with versioned structs and compatibility tests | P1 | 4 | 3 | 7 | The RFC calls for a stable schema, but the version is a hard-coded integer — bumped by hand from `1` to `2` in `v0.1.0` — with no versioned structs and no compatibility tests behind it. |
 | `dioxus-showcase-core` runtime | Add deterministic sorting for navigation tree children, not just top-level story order | P1 | 4 | 2 | 8 | Stories are sorted before generation, but nested navigation ordering still follows discovery order. |
 | `dioxus-showcase-core` runtime | Add duplicate-title and malformed-title validation helpers, not just duplicate IDs | P2 | 3 | 2 | 5 | Navigation and UX degrade when titles are empty, inconsistent, or collide in confusing ways. |
 | `dioxus-showcase-core` runtime | Add richer story metadata in shared types: description, docs URL, decorators, viewport/background settings, arg schema | P1 | 5 | 4 | 7 | Most roadmap features need shared data structures before they can be built cleanly. |
-| `dioxus-showcase-macros` overall | Add `trybuild`-style compile-fail tests for invalid attribute arguments and unsupported signatures | P0 | 5 | 2 | 11 | The macro test suite mostly checks happy paths; the most important proc-macro regressions are error-path regressions. |
 | `dioxus-showcase-macros` overall | Replace `compile_error!(format!("{:?}", err))` style diagnostics with proper `syn::Error` spans | P1 | 4 | 2 | 8 | Error reporting quality is one of the biggest adoption multipliers for proc-macro crates. |
 | `dioxus-showcase-macros` overall | Split metadata extraction from UI/control rendering so proc macros do less runtime UI work | P1 | 4 | 4 | 6 | The macros currently own authoring API, runtime wiring, and part of the preview UI, which is a high-coupling design. |
 | `#[showcase]` macro | Support explicit story IDs and collision-resistant defaults based on module path plus title | P1 | 4 | 3 | 7 | Title-only slugging can collide easily in real component libraries. |
@@ -68,22 +91,18 @@ These were the original first wave. They are done, and the table below no longer
 | CLI UX | Add non-interactive `init` flags and avoid always prompting | P1 | 4 | 2 | 8 | Interactive-only init is awkward for automation and scaffolding tools. |
 | CLI UX | Add machine-readable output modes such as JSON for `check`, `build`, and `doctor` | P1 | 4 | 2 | 8 | CI and editor integrations become much easier once commands can emit structured diagnostics. |
 | CLI UX | Add clearer error categorization with actionable hints per failure mode | P1 | 4 | 2 | 8 | Most command errors are currently plain strings with little recovery guidance. |
-| CLI discovery | Stop AST rescanning the source tree separately from macro expansion and move toward explicit registration artifacts | P0 | 5 | 4 | 9 | Discovery currently duplicates macro parsing rules and will continue to drift from the proc-macro behavior. |
+| CLI discovery | Stop AST rescanning the source tree separately from macro expansion, now that registration is authoritative and nothing at runtime reads discovery | P1 | 4 | 4 | 6 | Discovery still duplicates the macros' attribute-parsing rules in a second parser, so the two will keep drifting. `v0.1.0` settled which side wins but left both in the tree. |
 | CLI discovery | Detect and report invalid combinations such as duplicate titles, broken module paths, missing story symbols, and non-component functions | P1 | 4 | 3 | 7 | `check` should be the authoritative validation pass before generation. |
 | CLI discovery | Respect `.gitignore`/workspace exclusions and make ignore rules configurable | P2 | 3 | 2 | 5 | Recursive scans will become noisy and slow in larger workspaces. |
 | CLI build | Prune stale copied assets during `build`, the way `export` already prunes its site output | P2 | 3 | 2 | 5 | Asset syncing into the generated app is still additive and can leave behind dead files. |
 | CLI build | Support incremental generation so a single changed file does not rewrite the entire showcase app | P2 | 3 | 4 | 3 | This matters once story counts grow and the dev loop slows down. |
 | CLI dev loop | Replace polling-based watches with filesystem notifications using `notify` or equivalent | P1 | 4 | 2 | 8 | Polling every 700ms is simple but wasteful and less responsive. |
 | CLI dev loop | Manage child process lifecycle and signal forwarding more carefully, especially for Ctrl+C and failure states | P1 | 4 | 3 | 7 | The current thread/process model is workable but not very robust. |
-| CLI scaffold | Stop overwriting `showcase/src/main.rs` on every build, or split generated shell from user-editable shell extensions | P0 | 5 | 3 | 10 | Current regeneration makes the scaffold hard to customize safely. |
-| CLI scaffold | Preserve user-authored assets/custom files and support partial template upgrades | P1 | 4 | 3 | 7 | The scaffold is currently "owned" by the generator, which is acceptable for a prototype but poor for adoption. |
-| CLI scaffold | Add template versioning and migration support | P2 | 3 | 3 | 4 | Once generated apps exist in the wild, upgrades need a supported story. |
-| Showcase app template | Cache or memoize `showcase_components()`/derived tag data instead of rebuilding on every render path | P1 | 4 | 2 | 8 | The current template repeatedly rebuilds vectors and trees, which will scale poorly. |
-| Showcase app template | Move the large inline CSS and shell UI into template assets/components with tests | P2 | 3 | 2 | 5 | The generated `main.rs` is doing too much and will get harder to evolve. |
-| Showcase app template | Add search, sort, and keyboard navigation for larger story sets | P2 | 3 | 2 | 5 | The current tree-only navigation will become clumsy quickly. |
-| Showcase app template | Add empty/loading states for missing assets and invalid generated metadata | P2 | 3 | 2 | 5 | Story render failures are handled, but missing assets and malformed metadata are not. |
+| CLI scaffold | Stop unconditionally rewriting `showcase/Dioxus.toml`, and preserve user-authored files elsewhere in the generated app | P1 | 4 | 3 | 7 | `main.rs` and `Cargo.toml` became write-once in `v0.1.0`, but `Dioxus.toml` is still overwritten on every build, so any hand edit to it is silently lost — and no other user-authored file in the generated app directory is protected. |
+| Showcase shell | Memoize the derived tag list and navigation tree in `dioxus-showcase-ui`'s `Sidebar` instead of rebuilding them on every render | P1 | 4 | 2 | 8 | The registry itself is now read once behind a `use_hook`, but `all_tags` and `navigation` still rebuild a `Vec` and a whole tree on every sidebar render, which will scale poorly. |
+| Showcase shell | Add search, sort, and keyboard navigation for larger story sets | P2 | 3 | 2 | 5 | The current tree-only navigation will become clumsy quickly. |
+| Showcase shell | Add empty/loading states for missing assets and invalid generated metadata | P2 | 3 | 2 | 5 | Story render failures are handled, but missing assets and malformed metadata are not. |
 | Example crate | Expand the example to cover props structs, tags, multi-file modules, decorators, slots, and failure cases | P1 | 4 | 2 | 8 | The current example proves the happy path but not the tricky patterns users will copy. |
-| Testing | Add integration tests that run `init`, `check`, `build`, and `export` end to end against fixture workspaces on disk | P0 | 5 | 3 | 10 | Golden tests cover artifact writing, but the command layer that orchestrates it is untested. |
 | Testing | Add UI or browser smoke tests for the generated showcase shell | P1 | 4 | 3 | 7 | Route rendering, tag filtering, and asset loading are currently verified only by hand. |
 | Docs and RFC | Sync the RFC, README, and actual API names/features | P1 | 4 | 2 | 8 | The RFC still references `StoryArgs` derive and capabilities that differ from the implemented surface. |
 | Docs and RFC | Add architecture diagrams and a "current limitations" page separate from aspirational roadmap text | P2 | 3 | 1 | 6 | This helps contributors understand what is deliberately incomplete versus accidentally missing. |
@@ -92,19 +111,32 @@ These were the original first wave. They are done, and the table below no longer
 | Publish/release | Add release dry-run checks for generated scaffold contents and example workflows | P2 | 3 | 2 | 5 | Publishing the libraries without validating the generated app path leaves a gap in release confidence. |
 | Observability | Add verbose/debug logging modes for discovery, generation, and watch events | P2 | 3 | 1 | 6 | This will matter once users hit path/module issues in nontrivial workspaces. |
 | Security/reliability | Harden path handling around recursive copies and generated dependency paths | P2 | 3 | 2 | 5 | Most inputs are local, but path normalization and surprising relative paths are still easy footguns. |
-| Product direction | Decide whether the long-term source of truth is AST discovery, macro registration, or generated manifests, and align every crate around that choice | P0 | 5 | 4 | 9 | This is the highest-leverage strategic decision in the repo because several current rough edges come from mixed models. |
 
 ## Suggested Next Wave
 
-Ranked by score, the strongest remaining candidates are:
+The previous wave shipped with `v0.1.0` and has moved to *Already Shipped*. With every `P0`
+row now closed, nothing scores above 8 and thirteen rows tie there, so the ranking below
+breaks the tie by judgement rather than by arithmetic:
 
-1. Add `trybuild` compile-fail tests for the macros (score 11) — error paths are where
-   proc-macro regressions actually happen.
-2. Stop overwriting `showcase/src/main.rs` on every build (score 10) — the single biggest
-   obstacle to customizing a generated showcase.
-3. Add end-to-end tests for the command layer (score 10) — the orchestration between
-   discovery, generation, and scaffolding is the least covered code in the repo.
-4. Decide the source of truth between AST discovery and macro registration (score 9) — a
-   strategic call that several other items depend on.
-5. Define a stable registration contract so generated symbol names stop being load-bearing
-   (score 9).
+1. Remove duplicated helpers such as `slugify_title` and metadata parsing (score 8) — the
+   same logic still exists in the facade, the macros, and the CLI, which is the remaining
+   source of ID and discovery drift after the registration rework.
+2. Sync the RFC, README, and the actual API names and features (score 8) — the RFC now
+   describes a surface that diverges from what shipped, and it is the document a new
+   contributor reads first.
+3. Add non-interactive `init` flags (score 8) — interactive-only `init` blocks automation
+   and scaffolding tools, and it is the first thing a new user runs.
+4. Replace polling-based watches with filesystem notifications (score 8) — the dev loop got
+   measurably slower when the generated app took on thin LTO, so the 700ms poll is now a
+   larger share of a worse round trip.
+5. Stop AST rescanning the source tree separately from macro expansion (score 6) — ranked
+   above nine other rows that score higher because it is the only one that removes a class
+   of drift rather than a symptom. `v0.1.0` decided which side wins, but left both parsers
+   in the tree; deciding whether the second one earns its keep is the last piece of that
+   question.
+
+The first four break the tie toward whatever unblocks adoption or reduces known drift. Two
+rows were re-scored this wave and no others were touched: the AST-rescanning row dropped
+from `P0`/9 to `P1`/6 because the registration contract it was half about has shipped, and
+the scaffold-ownership row was rewritten around `Dioxus.toml`, which is the part of it that
+survives write-once.

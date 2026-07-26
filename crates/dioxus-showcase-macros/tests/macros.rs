@@ -83,7 +83,7 @@ fn slot_component(content: Element) -> Element {
     }
 }
 
-#[provider(index = 2)]
+#[provider(order = 2)]
 #[component]
 fn story_shell(children: Element) -> Element {
     rsx! {
@@ -196,4 +196,76 @@ fn story_props_derive_supports_default_types() {
     let _: ButtonArgs = dioxus_showcase::StoryArg::story_arg();
     let _: Variant = dioxus_showcase::StoryArg::story_arg();
     let _: ButtonProps = dioxus_showcase::StoryArg::story_arg();
+}
+
+// --- Link-time registration (C1/C2) ---
+//
+// These items are annotated above and referenced by nothing below. They reach
+// the registry only through the `inventory::submit!` the macros emit, which is
+// the whole point of the contract.
+
+#[story(title = "Atoms/Button/Default")]
+fn button_default_collides_on_purpose() -> &'static str {
+    "duplicate"
+}
+
+#[test]
+fn annotated_items_register_themselves_at_link_time() {
+    let registered = dioxus_showcase::registered_stories();
+
+    let ids =
+        registered.stories.iter().map(|story| story.definition.id.as_str()).collect::<Vec<_>>();
+
+    assert!(ids.contains(&"atoms-button-default"), "got {ids:?}");
+    assert!(ids.contains(&"atoms-button-controlled"), "got {ids:?}");
+    assert!(ids.contains(&"atoms-slot"), "got {ids:?}");
+}
+
+#[test]
+fn registered_stories_are_sorted_by_id() {
+    let registered = dioxus_showcase::registered_stories();
+
+    let ids =
+        registered.stories.iter().map(|story| story.definition.id.clone()).collect::<Vec<_>>();
+    let mut expected = ids.clone();
+    expected.sort();
+
+    assert_eq!(ids, expected);
+}
+
+#[test]
+fn colliding_story_ids_are_reported_rather_than_panicking() {
+    // Two `#[story]` items in this file claim "Atoms/Button/Default".
+    let registered = dioxus_showcase::registered_stories();
+
+    assert!(
+        registered.duplicate_ids.contains(&"atoms-button-default".to_owned()),
+        "got {:?}",
+        registered.duplicate_ids
+    );
+    // Both colliding stories are still present; neither was dropped.
+    let collisions = registered
+        .stories
+        .iter()
+        .filter(|story| story.definition.id == "atoms-button-default")
+        .count();
+    assert_eq!(collisions, 2);
+}
+
+#[test]
+fn registration_captures_the_call_site_file_and_module_path() {
+    let registered = dioxus_showcase::registered_stories();
+    let story = registered
+        .stories
+        .iter()
+        .find(|story| story.definition.id == "atoms-slot")
+        .expect("the slot story should be registered");
+
+    assert_eq!(story.definition.source_path, "crates/dioxus-showcase-macros/tests/macros.rs");
+    assert_eq!(story.definition.module_path, "macros::slot_component");
+}
+
+#[test]
+fn providers_register_themselves_at_link_time() {
+    assert_eq!(dioxus_showcase::registered_providers().len(), 1);
 }

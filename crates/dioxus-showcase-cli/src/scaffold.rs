@@ -1,16 +1,25 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition, StoryManifest};
+use dioxus_showcase_core::{
+    ProviderDefinition, ShowcaseConfig, StoryDefinition, StoryManifest, MANIFEST_SCHEMA_VERSION,
+};
 
 use crate::templates;
+
+/// The stylesheet older versions of the CLI generated into the showcase app.
+///
+/// The shell's own CSS ships inside `dioxus-showcase-ui` now. A copy left over from
+/// an earlier build would otherwise be picked up as if the user had written it and
+/// linked into the entry point, where it would fight the shell's real stylesheet.
+const LEGACY_SHELL_STYLESHEET: &str = "showcase.css";
 
 /// Returns the configured path of the generated showcase application crate.
 pub fn showcase_app_dir(config: &ShowcaseConfig) -> PathBuf {
     PathBuf::from(&config.project.showcase_crate)
 }
 
-/// Writes the manifest, generated runtime, shell app source, and synced assets.
+/// Writes the advisory manifest and the generated runtime, scaffolding the app first.
 pub fn write_artifacts(
     config: &ShowcaseConfig,
     stories: &[StoryDefinition],
@@ -20,26 +29,15 @@ pub fn write_artifacts(
     fs::create_dir_all(&out_dir)
         .map_err(|err| format!("failed to create {}: {err}", out_dir.display()))?;
 
-    let mut manifest = StoryManifest::new(1);
-    for story in stories {
-        manifest.add_story(story.clone());
-    }
-
     let manifest_path = out_dir.join("showcase.manifest.json");
-    fs::write(&manifest_path, manifest.to_json())
+    fs::write(&manifest_path, story_manifest(stories).to_json())
         .map_err(|err| format!("failed to create {}: {err}", manifest_path.display()))?;
 
     ensure_showcase_app_scaffold(config)?;
-    let stylesheets = sync_entry_assets_and_collect_stylesheets(config)?;
-    let main_path = showcase_app_dir(config).join("src/main.rs");
-    let main_rs = templates::render_showcase_app_main_rs(&config.build.base_path, &stylesheets)?;
-    fs::write(&main_path, main_rs)
-        .map_err(|err| format!("failed to create {}: {err}", main_path.display()))?;
 
     let generated_path = showcase_app_dir(config).join("src/generated.rs");
     let generation = stable_generation_token(stories, providers);
-    let generated_runtime =
-        templates::render_generated_runtime_rs(stories, providers, &generation)?;
+    let generated_runtime = templates::render_generated_runtime_rs(&generation)?;
     fs::write(&generated_path, generated_runtime)
         .map_err(|err| format!("failed to create {}: {err}", generated_path.display()))?;
 
@@ -47,6 +45,17 @@ pub fn write_artifacts(
 }
 
 /// Ensures the generated showcase app directory and seed files exist.
+///
+/// Everything here is idempotent, and two of the files are **write-once**:
+///
+/// - `Cargo.toml`, because a user adds their own dependencies to it.
+/// - `src/main.rs`, because it is the application's entry point and the shell it
+///   launches is a library now. Regenerating it would silently discard whatever the
+///   user put there, which is the failure this whole refactor exists to remove.
+///
+/// A consequence worth knowing: a project scaffolded before a stylesheet was added
+/// to the entry crate will not pick up the new `document::Stylesheet` line, because
+/// `main.rs` is never rewritten. Adding the line by hand is the fix.
 pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<(), String> {
     let app_dir = showcase_app_dir(config);
     let src_dir = app_dir.join("src");
@@ -57,8 +66,8 @@ pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<(), Strin
         .map_err(|err| format!("failed to create {}: {err}", assets_dir.display()))?;
 
     let cargo_toml_path = app_dir.join("Cargo.toml");
-    let cargo_toml = templates::render_showcase_app_cargo_toml(config)?;
     if !cargo_toml_path.exists() {
+        let cargo_toml = templates::render_showcase_app_cargo_toml(config)?;
         fs::write(&cargo_toml_path, cargo_toml)
             .map_err(|err| format!("failed to create {}: {err}", cargo_toml_path.display()))?;
     }
@@ -68,21 +77,33 @@ pub fn ensure_showcase_app_scaffold(config: &ShowcaseConfig) -> Result<(), Strin
     fs::write(&dioxus_toml_path, dioxus_toml)
         .map_err(|err| format!("failed to create {}: {err}", dioxus_toml_path.display()))?;
 
+    let stylesheets = sync_entry_assets_and_collect_stylesheets(config)?;
+
     let main_rs_path = src_dir.join("main.rs");
-    let main_rs = templates::render_showcase_app_main_rs(&config.build.base_path, &[])?;
-    fs::write(&main_rs_path, main_rs)
-        .map_err(|err| format!("failed to create {}: {err}", main_rs_path.display()))?;
+    if !main_rs_path.exists() {
+        let main_rs =
+            templates::render_showcase_app_main_rs(&config.build.base_path, &stylesheets)?;
+        fs::write(&main_rs_path, main_rs)
+            .map_err(|err| format!("failed to create {}: {err}", main_rs_path.display()))?;
+    }
 
     let generated_rs_path = src_dir.join("generated.rs");
-    let generated_rs = templates::render_generated_runtime_rs(&[], &[], "initial")?;
-    fs::write(&generated_rs_path, generated_rs)
-        .map_err(|err| format!("failed to create {}: {err}", generated_rs_path.display()))?;
-
-    let showcase_css_path = assets_dir.join("showcase.css");
-    fs::write(&showcase_css_path, templates::render_showcase_app_css())
-        .map_err(|err| format!("failed to create {}: {err}", showcase_css_path.display()))?;
+    if !generated_rs_path.exists() {
+        let generated_rs = templates::render_generated_runtime_rs("initial")?;
+        fs::write(&generated_rs_path, generated_rs)
+            .map_err(|err| format!("failed to create {}: {err}", generated_rs_path.display()))?;
+    }
 
     Ok(())
+}
+
+/// Builds the advisory manifest for the discovered stories.
+fn story_manifest(stories: &[StoryDefinition]) -> StoryManifest {
+    let mut manifest = StoryManifest::new(MANIFEST_SCHEMA_VERSION);
+    for story in stories {
+        manifest.add_story(story.clone());
+    }
+    manifest
 }
 
 /// Copies entry assets into the showcase app and returns all CSS asset URLs.
@@ -94,9 +115,8 @@ fn sync_entry_assets_and_collect_stylesheets(
 
     fs::create_dir_all(&showcase_assets_dir)
         .map_err(|err| format!("failed to create {}: {err}", showcase_assets_dir.display()))?;
-    let showcase_css_path = showcase_assets_dir.join("showcase.css");
-    fs::write(&showcase_css_path, templates::render_showcase_app_css())
-        .map_err(|err| format!("failed to create {}: {err}", showcase_css_path.display()))?;
+
+    remove_legacy_shell_stylesheet(&entry_assets_dir, &showcase_assets_dir)?;
 
     if entry_assets_dir.exists() {
         copy_dir_recursive(&entry_assets_dir, &showcase_assets_dir)?;
@@ -108,18 +128,33 @@ fn sync_entry_assets_and_collect_stylesheets(
     Ok(stylesheets)
 }
 
+/// Deletes the shell stylesheet earlier CLI versions generated, if the user has none.
+///
+/// Only a file the CLI itself would have written is removed: if the entry crate ships
+/// its own `assets/showcase.css`, that one is the user's and is copied over as usual.
+fn remove_legacy_shell_stylesheet(
+    entry_assets_dir: &Path,
+    showcase_assets_dir: &Path,
+) -> Result<(), String> {
+    if entry_assets_dir.join(LEGACY_SHELL_STYLESHEET).exists() {
+        return Ok(());
+    }
+
+    let stale = showcase_assets_dir.join(LEGACY_SHELL_STYLESHEET);
+    if !stale.exists() {
+        return Ok(());
+    }
+
+    fs::remove_file(&stale).map_err(|err| format!("failed to remove {}: {err}", stale.display()))
+}
+
 /// Computes a deterministic token representing the current generated runtime inputs.
 fn stable_generation_token(
     stories: &[StoryDefinition],
     providers: &[ProviderDefinition],
 ) -> String {
-    let mut manifest = StoryManifest::new(1);
-    for story in stories {
-        manifest.add_story(story.clone());
-    }
-
     let mut hash = 0xcbf29ce484222325u64;
-    for byte in manifest.to_json().bytes() {
+    for byte in story_manifest(stories).to_json().bytes() {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x100000001b3);
     }
@@ -132,7 +167,7 @@ fn stable_generation_token(
             hash ^= u64::from(byte);
             hash = hash.wrapping_mul(0x100000001b3);
         }
-        for byte in provider.index.to_le_bytes() {
+        for byte in provider.order.to_le_bytes() {
             hash ^= u64::from(byte);
             hash = hash.wrapping_mul(0x100000001b3);
         }
@@ -221,9 +256,11 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition};
+    use dioxus_showcase_core::{
+        ProviderDefinition, ShowcaseConfig, StoryDefinition, MANIFEST_SCHEMA_VERSION,
+    };
 
-    use super::{stable_generation_token, write_artifacts};
+    use super::{ensure_showcase_app_scaffold, stable_generation_token, write_artifacts};
 
     const GOLDEN_MANIFEST: &str = include_str!("testdata/build_golden_manifest.json");
     const GOLDEN_GENERATED_RS: &str = include_str!("testdata/build_golden_generated.rs");
@@ -238,64 +275,9 @@ mod tests {
         dir
     }
 
-    #[test]
-    fn write_artifacts_overwrites_existing_main_rs() {
-        let dir = temp_dir("dioxus-showcase-write-artifacts");
-        let entry_dir = dir.join("web");
-        let showcase_dir = dir.join("showcase");
-        let src_dir = showcase_dir.join("src");
-        std::fs::create_dir_all(&entry_dir).expect("create entry dir");
-        std::fs::create_dir_all(entry_dir.join("assets/styles")).expect("create entry assets");
-        std::fs::create_dir_all(&src_dir).expect("create showcase src");
-        std::fs::write(
-            entry_dir.join("Cargo.toml"),
-            "[package]\nname = \"web\"\nversion = \"0.1.0\"\n",
-        )
-        .expect("write entry cargo");
-        std::fs::write(entry_dir.join("assets/app.css"), "body { color: red; }")
-            .expect("write app css");
-        std::fs::write(entry_dir.join("assets/styles/tailwind.css"), ".btn { display: flex; }")
-            .expect("write tailwind css");
-
-        let main_rs_path = src_dir.join("main.rs");
-        std::fs::write(&main_rs_path, "stale main").expect("write stale main");
-
-        let mut config = ShowcaseConfig::default();
-        config.project.entry_crate = entry_dir.to_string_lossy().to_string();
-        config.project.showcase_crate = showcase_dir.to_string_lossy().to_string();
-        config.build.out_dir = dir.join("target/showcase").to_string_lossy().to_string();
-
-        write_artifacts(
-            &config,
-            &[StoryDefinition {
-                id: "atoms-button".to_owned(),
-                title: "Atoms/Button".to_owned(),
-                source_path: "src/button.rs".to_owned(),
-                module_path: "button::Button".to_owned(),
-                renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
-                tags: vec![],
-            }],
-            &[],
-        )
-        .expect("write artifacts");
-
-        let updated_main = std::fs::read_to_string(&main_rs_path).expect("read updated main");
-        assert!(updated_main.contains("fn Sidebar"));
-        assert!(updated_main.contains("asset!(\"/assets/app.css\")"));
-        assert!(updated_main.contains("asset!(\"/assets/showcase.css\")"));
-        assert!(updated_main.contains("asset!(\"/assets/styles/tailwind.css\")"));
-        assert!(!updated_main.contains("APP_CSS"));
-        assert!(!updated_main.contains("stale main"));
-        assert!(showcase_dir.join("assets/app.css").exists());
-        assert!(showcase_dir.join("assets/showcase.css").exists());
-        assert!(showcase_dir.join("assets/styles/tailwind.css").exists());
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn write_artifacts_matches_golden_outputs_and_is_stable() {
-        let dir = temp_dir("dioxus-showcase-build-golden");
+    /// Builds a project on disk and returns `(root, config)`.
+    fn project(prefix: &str) -> (PathBuf, ShowcaseConfig) {
+        let dir = temp_dir(prefix);
         let entry_dir = dir.join("web");
         let showcase_dir = dir.join("showcase");
         std::fs::create_dir_all(entry_dir.join("src")).expect("create entry src");
@@ -311,18 +293,101 @@ mod tests {
         config.project.showcase_crate = showcase_dir.to_string_lossy().to_string();
         config.build.out_dir = dir.join("target/showcase").to_string_lossy().to_string();
 
-        let stories = vec![StoryDefinition {
+        (dir, config)
+    }
+
+    fn button_story() -> StoryDefinition {
+        StoryDefinition {
             id: "atoms-button".to_owned(),
             title: "Atoms/Button".to_owned(),
             source_path: "/workspace/src/button.rs".to_owned(),
             module_path: "button_variants::Button".to_owned(),
             renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
             tags: vec!["atoms".to_owned()],
-        }];
+        }
+    }
+
+    #[test]
+    fn write_artifacts_never_overwrites_an_existing_main_rs() {
+        let (dir, config) = project("dioxus-showcase-write-once");
+        let main_rs_path = PathBuf::from(&config.project.showcase_crate).join("src/main.rs");
+        std::fs::create_dir_all(main_rs_path.parent().expect("src dir")).expect("create src");
+        std::fs::write(&main_rs_path, "// mine, thanks").expect("write user main");
+
+        write_artifacts(&config, &[button_story()], &[]).expect("write artifacts");
+
+        assert_eq!(std::fs::read_to_string(&main_rs_path).expect("read main"), "// mine, thanks");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_artifacts_seeds_main_rs_with_the_entry_crate_stylesheets() {
+        let (dir, config) = project("dioxus-showcase-seed-main");
+        let entry_dir = PathBuf::from(&config.project.entry_crate);
+        std::fs::create_dir_all(entry_dir.join("assets/styles")).expect("create entry assets");
+        std::fs::write(entry_dir.join("assets/app.css"), "body { color: red; }")
+            .expect("write app css");
+        std::fs::write(entry_dir.join("assets/styles/tailwind.css"), ".btn { display: flex; }")
+            .expect("write tailwind css");
+
+        write_artifacts(&config, &[button_story()], &[]).expect("write artifacts");
+
+        let showcase_dir = PathBuf::from(&config.project.showcase_crate);
+        let main_rs =
+            std::fs::read_to_string(showcase_dir.join("src/main.rs")).expect("read main.rs");
+        assert!(main_rs.contains("use showcase_entry as _;"));
+        assert!(main_rs.contains("document::Stylesheet { href: asset!(\"/assets/app.css\") }"));
+        assert!(main_rs
+            .contains("document::Stylesheet { href: asset!(\"/assets/styles/tailwind.css\") }"));
+        assert!(showcase_dir.join("assets/app.css").exists());
+        assert!(showcase_dir.join("assets/styles/tailwind.css").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scaffolding_drops_the_shell_stylesheet_earlier_versions_generated() {
+        let (dir, config) = project("dioxus-showcase-legacy-css");
+        let showcase_assets = PathBuf::from(&config.project.showcase_crate).join("assets");
+        std::fs::create_dir_all(&showcase_assets).expect("create showcase assets");
+        std::fs::write(showcase_assets.join("showcase.css"), ":root { --stale: 1; }")
+            .expect("write stale stylesheet");
+
+        ensure_showcase_app_scaffold(&config).expect("scaffold");
+
+        assert!(!showcase_assets.join("showcase.css").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_user_supplied_showcase_css_is_not_treated_as_legacy_output() {
+        let (dir, config) = project("dioxus-showcase-user-css");
+        let entry_assets = PathBuf::from(&config.project.entry_crate).join("assets");
+        std::fs::create_dir_all(&entry_assets).expect("create entry assets");
+        std::fs::write(entry_assets.join("showcase.css"), ".mine {}").expect("write user css");
+
+        ensure_showcase_app_scaffold(&config).expect("scaffold");
+
+        let showcase_assets = PathBuf::from(&config.project.showcase_crate).join("assets");
+        assert_eq!(
+            std::fs::read_to_string(showcase_assets.join("showcase.css")).expect("read css"),
+            ".mine {}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_artifacts_matches_golden_outputs_and_is_stable() {
+        let (dir, config) = project("dioxus-showcase-build-golden");
+        let stories = vec![button_story()];
 
         write_artifacts(&config, &stories, &[]).expect("first build");
 
         let manifest_path = PathBuf::from(&config.build.out_dir).join("showcase.manifest.json");
+        let showcase_dir = PathBuf::from(&config.project.showcase_crate);
         let generated_path = showcase_dir.join("src/generated.rs");
         let main_path = showcase_dir.join("src/main.rs");
 
@@ -348,15 +413,26 @@ mod tests {
     }
 
     #[test]
+    fn the_manifest_declares_the_advisory_schema_version() {
+        let (dir, config) = project("dioxus-showcase-schema-version");
+
+        write_artifacts(&config, &[button_story()], &[]).expect("write artifacts");
+
+        let manifest_path = PathBuf::from(&config.build.out_dir).join("showcase.manifest.json");
+        let manifest = std::fs::read_to_string(&manifest_path).expect("read manifest");
+        assert!(manifest.starts_with("{\"schema_version\":2,"), "{manifest}");
+        // The CLI must not carry its own copy of the version: it reads core's.
+        assert!(
+            manifest.starts_with(&format!("{{\"schema_version\":{MANIFEST_SCHEMA_VERSION},")),
+            "{manifest}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn stable_generation_token_is_deterministic() {
-        let stories = vec![StoryDefinition {
-            id: "atoms-button".to_owned(),
-            title: "Atoms/Button".to_owned(),
-            source_path: "src/button.rs".to_owned(),
-            module_path: "button::Button".to_owned(),
-            renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
-            tags: vec!["atoms".to_owned()],
-        }];
+        let stories = vec![button_story()];
 
         let first = stable_generation_token(&stories, &[]);
         let second = stable_generation_token(&stories, &[]);
@@ -368,8 +444,30 @@ mod tests {
             source_path: "src/provider.rs".to_owned(),
             module_path: "provider::Shell".to_owned(),
             wrap_symbol: "__dioxus_showcase_wrap__Shell".to_owned(),
-            index: 1,
+            order: 1,
         }];
         assert_ne!(first, stable_generation_token(&stories, &providers));
+    }
+
+    /// Pins the token byte-for-byte across the `index` -> `order` rename.
+    ///
+    /// The rename changes the field's NAME, never the value hashed: the same `i32`
+    /// still contributes the same `to_le_bytes()` in the same position. If a future
+    /// change alters the hash INPUT rather than just its spelling, this test fails
+    /// and CI's determinism assertion would have failed too — here it fails first,
+    /// with a name that says why.
+    #[test]
+    fn the_generation_token_is_unchanged_by_the_index_to_order_rename() {
+        let stories = vec![button_story()];
+
+        assert_eq!(stable_generation_token(&stories, &[]), "manifest-ce76a41f02cc03a2");
+
+        let providers = vec![ProviderDefinition {
+            source_path: "src/provider.rs".to_owned(),
+            module_path: "provider::Shell".to_owned(),
+            wrap_symbol: "__dioxus_showcase_wrap__Shell".to_owned(),
+            order: 1,
+        }];
+        assert_eq!(stable_generation_token(&stories, &providers), "manifest-6e737d1109715e39");
     }
 }

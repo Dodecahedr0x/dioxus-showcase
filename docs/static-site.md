@@ -18,7 +18,10 @@ dioxus-showcase export [--out-dir <DIR>] [--base-path <PATH>] [--debug]
 
 What it does, in order:
 
-1. Re-runs discovery and regenerates the showcase app sources, exactly like `build`.
+1. Runs the same generation pass as `build`: rewrites `generated.rs` and `Dioxus.toml`,
+   syncs assets, and writes `src/main.rs` only when absent. That file is write-once: an
+   existing `main.rs` is never overwritten, so your edits to the generated app survive an
+   export.
 2. Clears the output directory (see [Output directory safety](#output-directory-safety)).
 3. Runs `dx bundle --platform web --release` against the generated app crate.
 4. Flattens the bundle into the output directory.
@@ -187,6 +190,14 @@ Install the Dioxus CLI with `cargo install dioxus-cli --locked`, then confirm wi
 **Blank page, console 404s on `/assets/...`**
 The site is being served from a sub-path without a matching base path. Re-export with
 `--base-path /<sub-path>`.
+
+**The site loads and the shell renders, but there are no stories**
+Check that the showcase app's `Cargo.toml` still carries `[profile.dev] lto = "thin"` and
+`[profile.release] lto = true`. On `wasm32-unknown-unknown` those are required for
+correctness, not speed: without them the linker never pulls your component crate out of its
+rlib and every story registration is dropped, producing an empty showcase with no error
+anywhere. `dioxus-showcase check` warns if either is missing, and the README explains the
+mechanism in full. Restore them and re-export.
 
 **A deep link works in the app but 404s on refresh**
 The host is not falling back to `404.html`. Add the redirect rule for your host from the

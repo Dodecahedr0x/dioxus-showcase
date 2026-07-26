@@ -1,0 +1,29 @@
+[package]
+name = "dioxus-showcase-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Shell UI components for dioxus-showcase: routing, navigation, theming and filters."
+keywords = ["dioxus", "showcase", "storybook", "components", "ui"]
+categories = ["gui", "wasm", "web-programming"]
+
+[lib]
+name = "dioxus_showcase_ui"
+path = "src/lib.rs"
+
+[dependencies]
+# `router` is not a default feature of `dioxus`, and nothing else in this
+# workspace enables it (the generated showcase app is its own workspace, so its
+# feature selection does not unify with ours). The shell is built on `Routable`,
+# `Router` and `Link`, so it has to be requested here.
+dioxus = { workspace = true, features = ["router"] }
+dioxus-showcase = { workspace = true }
+
+[dev-dependencies]
+dioxus-ssr = { workspace = true }
+
+[lints]
+workspace = true

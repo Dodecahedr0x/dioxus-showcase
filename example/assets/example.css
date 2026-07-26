@@ -1,0 +1,10 @@
+/* A stylesheet owned by the component crate, not by dioxus-showcase.
+ *
+ * `dioxus-showcase build` copies everything under `example/assets/` into the
+ * generated showcase app and links each stylesheet from the generated
+ * `main.rs`, where `asset!()` runs at the user's own compile time. That is the
+ * only place it can run: a library cannot name a file it does not own. */
+.pill-button-note {
+  font: 500 12px/1.4 ui-sans-serif, -apple-system, Segoe UI, sans-serif;
+  color: #0f766e;
+}

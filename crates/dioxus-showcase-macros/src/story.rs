@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 
 use crate::utils::{
     parse_showcase_meta, render_controlled_story_component, render_story_frame, slugify_title,
-    story_arg_bindings,
+    story_arg_bindings, story_registration,
 };
 
 /// Expands `#[story]` into generated renderer, factory, and story constructor helpers.
@@ -21,7 +21,9 @@ pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
     let item_fn: syn::ItemFn = match syn::parse2(item_ts.clone()) {
         Ok(func) => func,
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            // `Display`, not `Debug`: the `Debug` form of a `syn::Error` is an
+            // unstable internal dump rather than something a user can act on.
+            let err_str = err.to_string();
             return quote! {
                 compile_error!(#err_str)
             };
@@ -70,6 +72,8 @@ pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
         )
     };
 
+    let registration = story_registration(&story_name, &story_symbol_name);
+
     quote! {
         #item_ts
         #controls_component
@@ -115,6 +119,8 @@ pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
                 module_path,
             )
         }
+
+        #registration
     }
 }
 
@@ -161,5 +167,102 @@ mod tests {
         let rendered = expanded.to_string();
         assert!(rendered.contains("story-preview"));
         assert!(rendered.contains("story-canvas"));
+    }
+}
+
+#[cfg(test)]
+mod error_tests {
+    use super::expand;
+    use proc_macro2::TokenStream as TokenStream2;
+    use quote::quote;
+
+    fn rendered(attr: TokenStream2, item: TokenStream2) -> String {
+        expand(attr, item).to_string()
+    }
+
+    fn assert_rejected(attr: TokenStream2, item: TokenStream2, needle: &str) {
+        let text = rendered(attr, item);
+        assert!(text.contains("compile_error !"), "expected a rejection, got: {text}");
+        assert!(text.contains(needle), "expected {needle:?} in: {text}");
+    }
+
+    fn zero_arg_story() -> TokenStream2 {
+        quote! { fn button_default() -> Element { rsx! { button {} } } }
+    }
+
+    #[test]
+    fn unparseable_attribute_arguments_are_rejected() {
+        assert_rejected(quote! { title = }, zero_arg_story(), "invalid #[showcase(...)] arguments");
+    }
+
+    #[test]
+    fn the_removed_component_argument_is_rejected_with_a_replacement() {
+        assert_rejected(
+            quote! { component = Button },
+            zero_arg_story(),
+            "no longer accepts component = ...; use title",
+        );
+    }
+
+    #[test]
+    fn the_removed_name_argument_is_rejected_with_a_replacement() {
+        assert_rejected(
+            quote! { name = "Default" },
+            zero_arg_story(),
+            "no longer accepts name = ...; include the full story path in title",
+        );
+    }
+
+    #[test]
+    fn non_function_items_are_rejected_with_a_display_formatted_error() {
+        // `Display`, not the `Debug` this used to use, which rendered as
+        // `Error("expected `fn`")`.
+        assert_eq!(
+            rendered(quote! {}, quote! { struct NotAFunction; }),
+            "compile_error ! (\"expected `fn`\")"
+        );
+    }
+
+    #[test]
+    fn receiver_arguments_are_rejected() {
+        assert_rejected(
+            quote! {},
+            quote! { fn button_default(&self, label: String) -> Element { rsx! {} } },
+            "showcase functions must not take a receiver argument",
+        );
+    }
+
+    #[test]
+    fn destructuring_parameters_are_rejected() {
+        assert_rejected(
+            quote! {},
+            quote! { fn button_default((a, b): (u8, u8)) -> Element { rsx! {} } },
+            "showcase function parameters must use simple identifier names",
+        );
+    }
+
+    #[test]
+    fn a_zero_arg_story_registers_itself_at_its_call_site() {
+        let text = rendered(quote! { title = "Atoms/Button/Default" }, zero_arg_story());
+
+        assert!(!text.contains("compile_error !"), "got {text}");
+        assert!(text.contains(":: dioxus_showcase :: ShowcaseRegistration"), "got {text}");
+        assert!(text.contains("source_path : file ! ()"), "got {text}");
+        assert!(
+            text.contains("concat ! (module_path ! () , \"::\" , stringify ! (button_default))"),
+            "got {text}"
+        );
+        assert!(text.contains("factory : __dioxus_showcase_story__button_default"), "got {text}");
+    }
+
+    #[test]
+    fn a_controlled_story_registers_itself_too() {
+        let text = rendered(
+            quote! { title = "Atoms/Button/Controlled" },
+            quote! { fn button_controlled(label: String) -> Element { rsx! {} } },
+        );
+
+        assert!(!text.contains("compile_error !"), "got {text}");
+        assert!(text.contains(":: dioxus_showcase :: ShowcaseRegistration"), "got {text}");
     }
 }

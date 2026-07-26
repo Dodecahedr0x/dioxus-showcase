@@ -2,8 +2,12 @@
 use dioxus::prelude::*;
 use dioxus_showcase_core::StoryDefinition;
 
+mod registration;
+
 pub mod prelude {
+    pub use crate::{registered_providers, registered_stories};
     pub use crate::{GeneratedStory, ShowcaseStoryFactory};
+    pub use crate::{ProviderRegistration, RegisteredStories, ShowcaseRegistration};
     pub use crate::{StoryArg, StoryArgs, StoryProps, StoryVariant};
     pub use dioxus_showcase_core::{
         ProviderDefinition, ShowcaseRegistry, StoryDefinition, StoryEntry,
@@ -13,6 +17,20 @@ pub mod prelude {
 
 pub use dioxus_showcase_core as core;
 pub use dioxus_showcase_macros as macros;
+pub use registration::{
+    registered_providers, registered_stories, ProviderRegistration, RegisteredStories,
+    ShowcaseRegistration,
+};
+
+/// Implementation detail of the `#[showcase]`, `#[story]` and `#[provider]`
+/// macros. Not public API.
+///
+/// The macros expand at the *user's* call site, in a crate that has no reason to
+/// depend on `inventory` directly, so they reach it back through this facade.
+#[doc(hidden)]
+pub mod __private {
+    pub use inventory;
+}
 
 pub type StoryProvider = fn(Element) -> Element;
 

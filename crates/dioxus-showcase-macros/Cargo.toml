@@ -4,7 +4,15 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Procedural macros for dioxus-showcase."
+keywords = ["dioxus", "showcase", "storybook", "macros", "proc-macro"]
+categories = [
+  "gui",
+  "development-tools::procedural-macro-helpers",
+  "development-tools",
+]
 
 [lib]
 proc-macro = true
@@ -18,6 +26,7 @@ syn = { workspace = true }
 
 [dev-dependencies]
 dioxus_showcase = { package = "dioxus-showcase", path = "../dioxus-showcase" }
+trybuild = { workspace = true }
 
 [lints]
 workspace = true

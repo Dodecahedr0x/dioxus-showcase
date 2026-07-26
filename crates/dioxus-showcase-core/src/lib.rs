@@ -5,7 +5,7 @@ pub mod manifest;
 pub mod runtime;
 
 pub use config::{ShowcaseBuildConfig, ShowcaseConfig, ShowcaseDevConfig, ShowcaseProjectConfig};
-pub use manifest::{StoryDefinition, StoryManifest};
+pub use manifest::{StoryDefinition, StoryManifest, MANIFEST_SCHEMA_VERSION};
 pub use runtime::{
     build_story_navigation, ProviderDefinition, ShowcaseRegistry, StoryEntry, StoryNavigationNode,
     StoryTreeEntry,

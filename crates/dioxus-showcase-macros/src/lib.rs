@@ -79,8 +79,12 @@ pub fn showcase(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The annotated component must declare a `children` parameter explicitly.
 /// Any additional parameters are initialized from `StoryArg::story_arg()`.
 ///
+/// Providers are applied in ascending `order`; the **lowest** order wraps
+/// **outermost**. Registration order is not a stable contract, so two providers
+/// that must nest in a particular way have to say so with `order`.
+///
 /// Supported arguments:
-/// - `index = 0`
+/// - `order = 0` (defaults to `0`, accepts negatives, e.g. `order = -10`)
 #[proc_macro_attribute]
 pub fn provider(attr: TokenStream, item: TokenStream) -> TokenStream {
     provider::expand(attr.into(), item.into()).into()

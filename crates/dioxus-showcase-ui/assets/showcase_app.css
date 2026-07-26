@@ -410,3 +410,145 @@ body {
     border-bottom: 1px solid var(--line);
   }
 }
+
+.duplicate-ids-banner {
+  margin: 0;
+  border-bottom: 1px solid #f0b4b4;
+  background: #fef2f2;
+  color: #7f1d1d;
+  padding: 12px 20px;
+}
+
+.duplicate-ids-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.duplicate-ids-list {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 2px;
+}
+
+.duplicate-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.app-shell[data-theme="dark"] .duplicate-ids-banner {
+  background: rgba(248, 113, 113, 0.12);
+  border-bottom-color: rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+}
+
+.empty-state {
+  max-width: 60ch;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.empty-state h2 {
+  margin: 0;
+}
+
+.empty-state p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.empty-state code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--accent-soft);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+.empty-state-code {
+  color: var(--accent);
+}
+
+.empty-state-causes {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.empty-state-causes li {
+  line-height: 1.5;
+}
+
+.empty-state-causes strong {
+  color: var(--text);
+}
+
+.empty-state-block {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  overflow-x: auto;
+}
+
+.empty-state-block code {
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  white-space: pre;
+}
+
+.story-surface-error {
+  border: 1px solid #f0b4b4;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #7f1d1d;
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.story-error-title {
+  margin: 0;
+}
+
+.story-error-details {
+  width: 100%;
+  overflow-x: auto;
+  font-size: 12px;
+  margin: 0;
+}
+
+.story-error-retry {
+  border: 1px solid #f0b4b4;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #7f1d1d;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.app-shell[data-theme="dark"] .story-surface-error {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+}
+
+.app-shell[data-theme="dark"] .story-error-retry {
+  background: transparent;
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #fecaca;
+}
+
+.back-link {
+  color: var(--accent);
+}

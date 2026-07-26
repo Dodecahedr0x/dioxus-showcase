@@ -1,5 +1,19 @@
 use serde::{Deserialize, Serialize};
 
+/// Schema version of `showcase.manifest.json`.
+///
+/// Bumped to 2 when discovery stopped being the runtime source of truth. The
+/// manifest and every field in it — `renderer_symbol` in particular — are advisory:
+/// they describe what a static scan of the sources found, which is diagnostic
+/// information, not what the built application will actually render.
+///
+/// This is the **single** definition of the manifest schema version. Every producer
+/// of a manifest — `ShowcaseRegistry::manifest()` here in core and the CLI's
+/// `write_artifacts` — must build from this constant. Two independent literals is
+/// exactly how the runtime and the CLI once came to claim different versions of the
+/// same format.
+pub const MANIFEST_SCHEMA_VERSION: u32 = 2;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoryDefinition {
     pub id: String,

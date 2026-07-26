@@ -9,4 +9,26 @@ publish = false
 [dependencies]
 dioxus = { version = "0.7", features = ["web", "router"] }
 dioxus-showcase = "{{package_version}}"
+dioxus-showcase-ui = "{{package_version}}"
 showcase_entry = { package = "{{entry_crate_package_name}}", path = "{{entry_crate_dependency_path}}" }
+
+# LTO IS LOAD-BEARING ON WASM. DO NOT REMOVE IT.
+#
+# Stories register themselves at link time, and `main.rs` refers to the component
+# crate only through `use showcase_entry as _;`. On wasm32 that import alone does
+# not pull the component crate's object out of its rlib archive: nothing in the
+# binary references a symbol inside it, so the linker never selects the archive
+# member and every registration in it disappears. Enabling LTO merges the crate
+# graph before that selection happens, which is what keeps the registrations.
+#
+# The failure is SILENT — the app builds, launches, and shows an empty showcase
+# with no error anywhere. Verified on Rust 1.94 / Dioxus CLI 0.7.9: without these
+# two lines a `dx build` and a `dx bundle --release` both produce zero stories.
+#
+# `strip` additionally keeps DWARF out of release wasm, which `wasm-opt` aborts on.
+[profile.dev]
+lto = "thin"
+
+[profile.release]
+lto = true
+strip = true

@@ -4,7 +4,16 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "CLI for developing and validating dioxus-showcase projects."
+keywords = ["dioxus", "showcase", "storybook", "cli", "codegen"]
+categories = [
+  "command-line-utilities",
+  "development-tools::build-utils",
+  "development-tools",
+  "gui",
+]
 
 # All command logic lives in the library so it can be unit tested; the binary is a thin
 # wrapper that maps a failed command to a non-zero exit code.

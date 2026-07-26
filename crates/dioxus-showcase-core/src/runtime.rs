@@ -1,4 +1,4 @@
-use crate::manifest::{StoryDefinition, StoryManifest};
+use crate::manifest::{StoryDefinition, StoryManifest, MANIFEST_SCHEMA_VERSION};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoryEntry {
@@ -11,7 +11,12 @@ pub struct ProviderDefinition {
     pub source_path: String,
     pub module_path: String,
     pub wrap_symbol: String,
-    pub index: i32,
+    /// Wrapping order for this provider: lowest wraps outermost, default 0 (A25).
+    ///
+    /// Named `order` to match `#[provider(order = N)]` and `ProviderRegistration.order`.
+    /// The pre-release spelling was `index`, which is rejected by name with a migration
+    /// message; this field is public API and must not keep the retired vocabulary.
+    pub order: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,7 +47,7 @@ impl ShowcaseRegistry {
 
     /// Converts the registered stories into a serializable manifest.
     pub fn manifest(&self) -> StoryManifest {
-        let mut manifest = StoryManifest::new(1);
+        let mut manifest = StoryManifest::new(MANIFEST_SCHEMA_VERSION);
         for story in &self.stories {
             manifest.add_story(story.definition.clone());
         }
@@ -182,9 +187,34 @@ mod tests {
 
         assert_eq!(registry.story_count(), 1);
         let manifest = registry.manifest();
-        assert_eq!(manifest.schema_version, 1);
+        // Both halves matter: the first proves the runtime does not invent its own
+        // schema version, the second pins the value A24 fixed for this release.
+        assert_eq!(manifest.schema_version, MANIFEST_SCHEMA_VERSION);
+        assert_eq!(manifest.schema_version, 2);
         assert_eq!(manifest.stories.len(), 1);
         assert_eq!(manifest.stories[0].id, "atoms-button-default");
+    }
+
+    /// `ProviderDefinition` is re-exported in `dioxus_showcase::prelude`, so its field
+    /// names are public API. This release renamed the concept from `index` to `order`
+    /// everywhere else — the macro attribute, the rejection message, the CHANGELOG and
+    /// `ProviderRegistration.order` — and this struct must speak the same vocabulary.
+    #[test]
+    fn provider_definitions_sort_by_the_order_field() {
+        let provider = |module_path: &str, order: i32| ProviderDefinition {
+            source_path: "src/provider.rs".to_owned(),
+            module_path: module_path.to_owned(),
+            wrap_symbol: "__dioxus_showcase_wrap__Shell".to_owned(),
+            order,
+        };
+
+        let mut providers = [provider("provider::Default", 0), provider("provider::Shell", -10)];
+        providers.sort_by_key(|provider| provider.order);
+
+        // Lowest order wraps outermost (A25).
+        assert_eq!(providers[0].order, -10);
+        assert_eq!(providers[0].module_path, "provider::Shell");
+        assert_eq!(providers[1].order, 0);
     }
 
     #[test]

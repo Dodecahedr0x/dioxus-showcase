@@ -1,0 +1,7 @@
+error: showcase order must be an integer literal
+ --> tests/ui/provider_with_bad_order.rs:3:1
+  |
+3 | #[provider(order = "first")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `provider` (in Nightly builds, run with -Z macro-backtrace for more info)

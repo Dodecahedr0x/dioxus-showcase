@@ -4,7 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Facade crate for building storybook-style Dioxus showcases."
+keywords = ["dioxus", "showcase", "storybook", "components", "ui"]
+categories = ["gui", "wasm", "web-programming", "development-tools"]
 
 [lib]
 name = "dioxus_showcase"
@@ -14,6 +18,10 @@ path = "src/lib.rs"
 dioxus = { workspace = true }
 dioxus-showcase-core = { workspace = true }
 dioxus-showcase-macros = { workspace = true }
+# Link-time story/provider registration. The `registration` module that uses it
+# lands with the registration node; declared here so the contract and the
+# lockfile are settled first.
+inventory = { workspace = true }
 
 [lints]
 workspace = true

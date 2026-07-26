@@ -1,0 +1,7 @@
+error: #[story(...)] no longer accepts component = ...; use title = "..." instead
+ --> tests/ui/story_with_removed_component_arg.rs:3:1
+  |
+3 | #[story(component = Button)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `story` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,0 +1,7 @@
+error: provider components must declare a `children` parameter explicitly
+ --> tests/ui/provider_without_children.rs:3:1
+  |
+3 | #[provider]
+  | ^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `provider` (in Nightly builds, run with -Z macro-backtrace for more info)

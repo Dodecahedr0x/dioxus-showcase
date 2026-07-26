@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_showcase::prelude::*;
 
-#[provider(index = 0)]
+#[provider(order = 0)]
 #[component]
 /// Wraps every example story in a simple padded shell.
 pub fn ExampleStoryShell(children: Element) -> Element {

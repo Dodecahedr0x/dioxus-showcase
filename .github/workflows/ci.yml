@@ -6,11 +6,18 @@ on:
     branches:
       - main
 
+env:
+  # Pinned so the `dx` cache key below is deterministic and a new CLI release
+  # cannot change what CI builds without a commit. Bump alongside the `dioxus`
+  # dependency in Cargo.toml.
+  DIOXUS_CLI_VERSION: "0.7.9"
+
 jobs:
   # Mirrors the pre-PR checklist in CONTRIBUTING.md. Keep the two in sync.
   checks:
     name: Format, lint, test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -30,14 +37,48 @@ jobs:
       - name: Lint (clippy)
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      # --all-targets --all-features is what pulls the trybuild compile-fail suite
+      # onto the main path. Deliberately ungated on stable: this repo has no nightly
+      # leg, so a nightly gate would make those tests silently never run.
       - name: Run tests
         run: cargo test --workspace --all-targets --all-features
+
+      # Packaging breaks surface here, on the PR, instead of at tag time when the
+      # first crate has already been published and cannot be taken back. Lives in
+      # this job rather than its own because it reuses the warm cargo cache above;
+      # a standalone job would recompile the whole dependency tree from cold.
+      - name: Package all published crates (dry run)
+        run: cargo publish --workspace --dry-run
+
+  # The declared `rust-version = "1.85"` cannot be allowed to rot. 1.85 is not a
+  # style preference: below it `inventory`'s wasm support fails SILENTLY, yielding
+  # an empty story registry with no error at all.
+  msrv:
+    name: MSRV 1.85
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No `components:` on purpose — old toolchains may not carry rustfmt/clippy
+      # and linting is not what this job is for.
+      - name: Install Rust 1.85
+        uses: dtolnay/rust-toolchain@1.85
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check the workspace builds on the declared MSRV
+        run: cargo check --workspace --all-features
 
   # Proves the documented first-run flow works on a clean checkout with no manual setup.
   # This is what catches DioxusShowcase.toml or the example scaffold becoming untracked.
   example:
     name: Example pipeline
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -69,3 +110,90 @@ jobs:
 
       - name: Assert generated output left the working tree clean
         run: git diff --exit-code
+
+  # The ONLY place `export` runs against a real Dioxus toolchain. The on-disk test
+  # suite covers `export` with a fake `dx` on PATH, which exercises everything
+  # `export` itself owns (staging, flattening, the 404 fallback, asset pruning) but
+  # cannot tell us whether the real `dx` still produces a bundle of the shape
+  # `export` expects. It is also unix-only. This job closes both gaps.
+  #
+  # Build only. There is no hosted demo, so there is deliberately no deploy step,
+  # no Pages artifact upload, and no pages.yml — not a disabled one, none at all.
+  export:
+    name: Static site export
+    runs-on: ubuntu-latest
+    # A wasm release build plus a cold `dx` install is by far the longest thing in
+    # this workflow. Bounded so a hang costs one hour, not the six-hour default.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Swatinem/rust-cache does not cache ~/.cargo/bin, and building dioxus-cli
+      # from source is the single most expensive step here. Cache just the binary,
+      # keyed on the pinned version so a bump invalidates it automatically.
+      - name: Cache the Dioxus CLI binary
+        id: cache-dx
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/dx
+          key: dx-${{ runner.os }}-${{ env.DIOXUS_CLI_VERSION }}
+
+      - name: Install the Dioxus CLI
+        if: steps.cache-dx.outputs.cache-hit != 'true'
+        run: cargo install dioxus-cli --version ${{ env.DIOXUS_CLI_VERSION }} --locked
+
+      # `build` downgrades duplicate story ids to warnings; only `check` still errors
+      # on them. Run it here so a collision fails in seconds rather than after a
+      # fifteen-minute wasm build that would have "succeeded" with a broken site.
+      - name: Validate discovery before exporting
+        run: cargo run -p dioxus-showcase-cli -- check
+
+      - name: Export the static site
+        run: cargo run -p dioxus-showcase-cli -- export
+
+      # `resolve_site_dir` defaults to <build.out_dir>/site, and DioxusShowcase.toml
+      # sets out_dir = "target/showcase".
+      - name: Assert the exported site is complete
+        run: |
+          set -euo pipefail
+          test -f target/showcase/site/index.html
+          test -f target/showcase/site/404.html
+          test -f target/showcase/site/.nojekyll
+          test -d target/showcase/site/assets
+          # A bare `test -d` passes on an EMPTY assets/ directory, which is exactly
+          # the failure this job exists to catch: a site that exists and ships
+          # nothing. Require at least one real file.
+          test -n "$(find target/showcase/site/assets -type f -print -quit)"
+          # And index.html must be a real shell, not a stub error page.
+          test "$(wc -c < target/showcase/site/index.html)" -gt 500
+
+      # The registrations only survive into the wasm because the generated app
+      # enables LTO; without it `use <entry_crate> as _;` does not pull the rlib in,
+      # the archive member is never selected, and the showcase renders EMPTY with no
+      # error anywhere. Nothing above would notice — the site would still have an
+      # index.html, a 404.html and a populated assets/. So assert the user's own
+      # story symbols are actually inside the shipped binary.
+      - name: Assert the user's stories linked into the wasm
+        run: |
+          set -euo pipefail
+          wasm=$(find target/showcase/site/assets -name '*_bg.wasm' -print -quit)
+          if [ -z "$wasm" ]; then
+            wasm=$(find target/showcase/site/assets -name '*.wasm' -print -quit)
+          fi
+          test -n "$wasm"
+          echo "Inspecting $wasm ($(wc -c < "$wasm") bytes)"
+          grep -qa PillButtonControllable "$wasm"
+          grep -qa pill_button_primary "$wasm"
+
+      - name: Show the exported site layout
+        run: ls -laR target/showcase/site

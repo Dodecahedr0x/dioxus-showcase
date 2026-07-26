@@ -4,7 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Core data model and shared types for dioxus-showcase."
+keywords = ["dioxus", "showcase", "storybook", "components"]
+categories = ["gui", "development-tools", "data-structures"]
 
 [lib]
 name = "dioxus_showcase_core"

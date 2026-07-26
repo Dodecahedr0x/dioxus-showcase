@@ -3,31 +3,45 @@ members = [
   "crates/dioxus-showcase-core",
   "crates/dioxus-showcase-macros",
   "crates/dioxus-showcase",
+  "crates/dioxus-showcase-ui",
   "crates/dioxus-showcase-cli",
   "example",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.0.7"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Dodecahedr0x <dodecahedr0x@proton.me>"]
 repository = "https://github.com/Dodecahedr0x/dioxus-showcase"
+# Measured, not guessed. `cargo msrv find -- cargo check --workspace --all-features`
+# reports 1.85.1; an explicit `cargo +1.85.0 check --workspace --all-features` also
+# passes, so the true floor is 1.85.0. 1.84 fails: `time-core` needs edition2024,
+# stabilised in 1.85. This coincides with the hard floor from `inventory`, whose
+# wasm32-unknown-unknown support is gated on 1.85 and fails SILENTLY below it —
+# empty registry, no error. Never lower this. See decisions.md A11.
+rust-version = "1.85"
 
 [workspace.dependencies]
 clap = { version = "4.5", features = ["derive"] }
 dioxus = { version = "0.7" }
-dioxus-showcase-core = { version = "0.0.7", path = "crates/dioxus-showcase-core" }
-dioxus-showcase-macros = { version = "0.0.7", path = "crates/dioxus-showcase-macros" }
-dioxus-showcase = { version = "0.0.7", path = "crates/dioxus-showcase" }
+dioxus-showcase-core = { version = "0.1.0", path = "crates/dioxus-showcase-core" }
+dioxus-showcase-macros = { version = "0.1.0", path = "crates/dioxus-showcase-macros" }
+dioxus-showcase = { version = "0.1.0", path = "crates/dioxus-showcase" }
+dioxus-showcase-ui = { version = "0.1.0", path = "crates/dioxus-showcase-ui" }
+dioxus-ssr = "0.7"
 handlebars = "6.3"
+# 0.3.24 is the first release with wasm32-unknown-unknown support. Below it the
+# registry links but stays EMPTY, with no error of any kind. Never lower this.
+inventory = "0.3.24"
 proc-macro2 = "1.0"
 quote = "1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 syn = "2.0"
 toml = "0.8"
+trybuild = "1.0"
 
 [workspace.lints.clippy]
 all = "warn"

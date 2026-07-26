@@ -193,7 +193,7 @@ pub struct ShowcaseMeta {
     pub component: Option<String>,
     pub name: Option<String>,
     pub tags: Vec<String>,
-    pub index: Option<i32>,
+    pub order: Option<i32>,
 }
 
 /// Parses supported macro metadata keys shared by story, showcase, and provider attributes.
@@ -246,21 +246,49 @@ pub fn parse_showcase_meta(attr: TokenStream2) -> Result<ShowcaseMeta, String> {
             continue;
         }
 
+        if named.path.is_ident("order") {
+            out.order = Some(parse_order_value(&named.value)?);
+            continue;
+        }
+
+        // `index` was the 0.0.x spelling of `order`. Rejecting it by name, with
+        // the replacement spelled out, is the only migration aid a user gets
+        // besides the CHANGELOG — so it is worth saying more than "unknown key".
         if named.path.is_ident("index") {
-            let syn::Expr::Lit(expr_lit) = named.value else {
-                return Err("showcase index must be an integer literal".to_owned());
-            };
-            let syn::Lit::Int(lit) = expr_lit.lit else {
-                return Err("showcase index must be an integer literal".to_owned());
-            };
-            out.index = Some(
-                lit.base10_parse::<i32>()
-                    .map_err(|_| "showcase index must fit in i32".to_owned())?,
+            return Err(
+                "`index` was renamed to `order` in 0.1.0: write #[provider(order = <integer>)]. \
+                 The meaning is unchanged — providers apply in ascending order and the lowest \
+                 order wraps outermost."
+                    .to_owned(),
             );
         }
     }
 
     Ok(out)
+}
+
+/// Parses an `order = <integer>` value, including negative literals.
+///
+/// `order = -10` is a unary negation expression rather than a literal, so
+/// matching only `Expr::Lit` would silently drop every negative order.
+fn parse_order_value(value: &syn::Expr) -> Result<i32, String> {
+    let (negative, expr) = match value {
+        syn::Expr::Unary(unary) if matches!(unary.op, syn::UnOp::Neg(_)) => {
+            (true, unary.expr.as_ref())
+        }
+        other => (false, other),
+    };
+
+    let syn::Expr::Lit(expr_lit) = expr else {
+        return Err("showcase order must be an integer literal".to_owned());
+    };
+    let syn::Lit::Int(lit) = &expr_lit.lit else {
+        return Err("showcase order must be an integer literal".to_owned());
+    };
+
+    let digits = lit.base10_digits();
+    let signed = if negative { format!("-{digits}") } else { digits.to_owned() };
+    signed.parse::<i32>().map_err(|_| "showcase order must fit in i32".to_owned())
 }
 
 /// Extracts the last path segment from a component path expression.
@@ -290,6 +318,44 @@ fn parse_tags_array(array: &syn::ExprArray) -> Result<Vec<String>, String> {
         .collect()
 }
 
+/// Emits the link-time story registration for one annotated item.
+///
+/// This expands at the **user's** call site, so `file!()` and `module_path!()`
+/// bake in the user's source file and module rather than this crate's.
+/// `module_path!()` names only the module, hence the `concat!` that appends the
+/// item — that reproduces the `krate::module::item` form the CLI already used.
+///
+/// `factory` must stay a plain `fn` item: `inventory::submit!` stores the value
+/// in a `static`, which a closure could not inhabit.
+pub fn story_registration(item_name: &syn::Ident, story_symbol_name: &syn::Ident) -> TokenStream2 {
+    quote! {
+        ::dioxus_showcase::__private::inventory::submit! {
+            ::dioxus_showcase::ShowcaseRegistration {
+                source_path: file!(),
+                module_path: concat!(module_path!(), "::", stringify!(#item_name)),
+                factory: #story_symbol_name,
+            }
+        }
+    }
+}
+
+/// Emits the link-time provider registration for one annotated component.
+pub fn provider_registration(
+    component_name: &syn::Ident,
+    wrap_name: &syn::Ident,
+    order: i32,
+) -> TokenStream2 {
+    quote! {
+        ::dioxus_showcase::__private::inventory::submit! {
+            ::dioxus_showcase::ProviderRegistration {
+                module_path: concat!(module_path!(), "::", stringify!(#component_name)),
+                order: #order,
+                wrap: #wrap_name,
+            }
+        }
+    }
+}
+
 /// Normalizes a title into the slug format used by generated story ids.
 pub fn slugify_title(title: &str) -> String {
     let mut out = String::with_capacity(title.len());
@@ -310,4 +376,163 @@ pub fn slugify_title(title: &str) -> String {
     }
 
     out.trim_matches('-').to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::{format_ident, quote};
+
+    /// Returns the error message `parse_showcase_meta` produced, or panics.
+    fn meta_error(attr: TokenStream2) -> String {
+        parse_showcase_meta(attr).err().expect("expected the attribute to be rejected")
+    }
+
+    #[test]
+    fn unparseable_attribute_arguments_are_rejected() {
+        assert!(meta_error(quote! { title = }).starts_with("invalid #[showcase(...)] arguments:"));
+    }
+
+    #[test]
+    fn non_literal_title_is_rejected() {
+        assert_eq!(
+            meta_error(quote! { title = some_ident }),
+            "showcase title must be a string literal"
+        );
+        assert_eq!(meta_error(quote! { title = 12 }), "showcase title must be a string literal");
+    }
+
+    #[test]
+    fn non_literal_name_is_rejected() {
+        assert_eq!(meta_error(quote! { name = 12 }), "showcase name must be a string literal");
+    }
+
+    #[test]
+    fn non_path_component_is_rejected() {
+        assert_eq!(
+            meta_error(quote! { component = "Button" }),
+            "showcase component must be a component path"
+        );
+    }
+
+    #[test]
+    fn non_array_tags_are_rejected() {
+        assert_eq!(
+            meta_error(quote! { tags = "atoms" }),
+            "showcase tags must be an array of string literals"
+        );
+    }
+
+    #[test]
+    fn non_string_tag_elements_are_rejected() {
+        assert_eq!(
+            meta_error(quote! { tags = [1, 2] }),
+            "showcase tags must contain string literals only"
+        );
+    }
+
+    #[test]
+    fn the_removed_index_spelling_is_rejected_and_names_its_replacement() {
+        let message = meta_error(quote! { index = 2 });
+
+        assert!(message.contains("`index` was renamed to `order`"), "got {message}");
+        assert!(message.contains("#[provider(order = <integer>)]"), "got {message}");
+        // The wrap direction is the part a migrating user cannot guess.
+        assert!(message.contains("lowest order wraps outermost"), "got {message}");
+    }
+
+    #[test]
+    fn index_is_rejected_even_when_order_is_also_present() {
+        // Silently preferring `order` here would let a half-migrated attribute
+        // compile, which is how the old spelling would survive unnoticed.
+        assert!(meta_error(quote! { order = 5, index = 2 }).contains("`index` was renamed"));
+    }
+
+    #[test]
+    fn non_integer_order_is_rejected() {
+        assert_eq!(
+            meta_error(quote! { order = "first" }),
+            "showcase order must be an integer literal"
+        );
+    }
+
+    #[test]
+    fn out_of_range_order_is_rejected() {
+        assert_eq!(meta_error(quote! { order = 99999999999 }), "showcase order must fit in i32");
+    }
+
+    #[test]
+    fn order_accepts_negative_literals() {
+        // `order = -10` is a unary negation expression, not a literal, so this
+        // is the case a naive `Expr::Lit` match drops on the floor.
+        let meta = parse_showcase_meta(quote! { order = -10 }).expect("negative order is valid");
+        assert_eq!(meta.order, Some(-10));
+    }
+
+    #[test]
+    fn order_accepts_positive_literals_and_defaults_to_absent() {
+        assert_eq!(parse_showcase_meta(quote! { order = 7 }).unwrap().order, Some(7));
+        assert_eq!(parse_showcase_meta(quote! {}).unwrap().order, None);
+    }
+
+    #[test]
+    fn title_and_tags_parse_together() {
+        let meta = parse_showcase_meta(quote! { title = "Atoms/Button", tags = ["a", "b"] })
+            .expect("valid attribute");
+        assert_eq!(meta.title.as_deref(), Some("Atoms/Button"));
+        assert_eq!(meta.tags, vec!["a".to_owned(), "b".to_owned()]);
+    }
+
+    /// Returns the error `story_arg_bindings` produced for a signature.
+    fn binding_error(sig: TokenStream2) -> String {
+        let item_fn: syn::ItemFn = syn::parse2(sig).expect("test signature should parse");
+        story_arg_bindings(&item_fn.sig.inputs).err().expect("expected a rejection")
+    }
+
+    #[test]
+    fn receiver_arguments_are_rejected() {
+        assert_eq!(
+            binding_error(quote! { fn demo(&self, label: String) {} }),
+            "showcase functions must not take a receiver argument"
+        );
+    }
+
+    #[test]
+    fn destructuring_parameter_patterns_are_rejected() {
+        assert!(binding_error(quote! { fn demo((a, b): (u8, u8)) {} })
+            .starts_with("showcase function parameters must use simple identifier names"));
+    }
+
+    #[test]
+    fn story_registration_targets_the_facade_and_the_call_site() {
+        let tokens = story_registration(
+            &format_ident!("button_default"),
+            &format_ident!("__dioxus_showcase_story__button_default"),
+        )
+        .to_string();
+
+        assert!(tokens.contains(":: dioxus_showcase :: __private :: inventory :: submit"));
+        assert!(tokens.contains(":: dioxus_showcase :: ShowcaseRegistration"));
+        // `file!()`/`module_path!()` must stay unexpanded here so they resolve
+        // at the user's call site, not in this crate.
+        assert!(tokens.contains("source_path : file ! ()"));
+        assert!(
+            tokens.contains("concat ! (module_path ! () , \"::\" , stringify ! (button_default))")
+        );
+        assert!(tokens.contains("factory : __dioxus_showcase_story__button_default"));
+    }
+
+    #[test]
+    fn provider_registration_carries_the_order() {
+        let tokens = provider_registration(
+            &format_ident!("Theme"),
+            &format_ident!("__dioxus_showcase_wrap__Theme"),
+            -10,
+        )
+        .to_string();
+
+        assert!(tokens.contains(":: dioxus_showcase :: ProviderRegistration"));
+        assert!(tokens.contains("order : - 10i32"), "got {tokens}");
+        assert!(tokens.contains("wrap : __dioxus_showcase_wrap__Theme"));
+    }
 }

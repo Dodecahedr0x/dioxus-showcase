@@ -30,6 +30,7 @@ awk -v version="$VERSION" '
     saw_core_dep = 0
     saw_macros_dep = 0
     saw_showcase_dep = 0
+    saw_ui_dep = 0
   }
 
   /^\[workspace\.package\]$/ {
@@ -74,6 +75,13 @@ awk -v version="$VERSION" '
       next
     }
 
+    if (in_workspace_dependencies && line ~ /^dioxus-showcase-ui = \{/) {
+      gsub(/version = "[^"]+"/, "version = \"" version "\"", line)
+      print line
+      saw_ui_dep = 1
+      next
+    }
+
     if (in_workspace_dependencies && line ~ /^dioxus-showcase = \{/) {
       gsub(/version = "[^"]+"/, "version = \"" version "\"", line)
       print line
@@ -90,7 +98,7 @@ awk -v version="$VERSION" '
       exit 1
     }
 
-    if (!saw_core_dep || !saw_macros_dep || !saw_showcase_dep) {
+    if (!saw_core_dep || !saw_macros_dep || !saw_showcase_dep || !saw_ui_dep) {
       print "[set-workspace-version] failed to update one or more internal workspace dependency versions" > "/dev/stderr"
       exit 1
     }

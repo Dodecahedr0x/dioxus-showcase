@@ -1,3 +1,20 @@
+//! Static discovery of annotated items — **advisory only**.
+//!
+//! Nothing at runtime depends on this module any more. Stories and providers
+//! register themselves at link time through `inventory`, so what a source scan
+//! finds only ever feeds two things: the diagnostics `dioxus-showcase check`
+//! prints, and `target/showcase/showcase.manifest.json`.
+//!
+//! Two rules follow from that, and both are load-bearing:
+//!
+//! - **Discovery must never fail a build.** If this module and the macros drift
+//!   apart — a `#[showcase]` behind a `cfg`, a module it cannot resolve, a file it
+//!   cannot parse — the result is worse diagnostics, not a broken build. `build`
+//!   downgrades every error here to a warning; `check`, whose entire job is
+//!   diagnostics, still reports them as failures.
+//! - **Discovery must never compile anything.** `check` is expected to be fast
+//!   enough to run on every save, which is the only reason a second, static
+//!   implementation of "what stories exist" is worth keeping at all.
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -31,7 +48,10 @@ pub fn discover_providers(
         providers.extend(discover_providers_in_file(&entry_src_dir, &file)?);
     }
 
-    providers.sort_by_key(|provider| provider.index);
+    // Ascending `order`, matching the runtime rule that the lowest order wraps
+    // outermost. The runtime breaks ties by module path and this does not; that is
+    // acceptable because this ordering is advisory, but it must not contradict.
+    providers.sort_by_key(|provider| provider.order);
     Ok(providers)
 }
 
@@ -51,18 +71,19 @@ pub fn discover_component_source_files(
     Ok(files)
 }
 
-/// Ensures no two discovered stories would claim the same route id.
-pub fn validate_component_ids(stories: &[StoryDefinition]) -> Result<(), String> {
-    let mut seen = std::collections::HashSet::new();
-    for story in stories {
-        if !seen.insert(story.id.clone()) {
-            return Err(format!(
-                "duplicate showcase id '{}' found for title '{}'",
-                story.id, story.title
-            ));
-        }
-    }
-    Ok(())
+/// Returns every route id claimed by more than one discovered story.
+///
+/// Reporting all of them, rather than erroring on the first, is what lets `check`
+/// print one diagnostic per collision. The result is sorted and deduplicated, so it
+/// does not depend on the order files happened to be walked in.
+pub fn duplicate_story_ids(stories: &[StoryDefinition]) -> Vec<String> {
+    let mut ids: Vec<&str> = stories.iter().map(|story| story.id.as_str()).collect();
+    ids.sort_unstable();
+
+    let mut duplicates: Vec<String> =
+        ids.windows(2).filter(|pair| pair[0] == pair[1]).map(|pair| pair[0].to_owned()).collect();
+    duplicates.dedup();
+    duplicates
 }
 
 /// Resolves the configured entry crate `src/` directory.
@@ -275,7 +296,7 @@ fn collect_providers_from_items(
                         &module_path_segments,
                     )?,
                     wrap_symbol: showcase_provider_symbol(&component_name),
-                    index: metadata.index.unwrap_or(0),
+                    order: metadata.order.unwrap_or(0),
                 });
             }
             Item::Mod(item_mod) => {
@@ -397,7 +418,7 @@ fn module_path_override(attrs: &[Attribute]) -> Result<Option<String>, String> {
 struct ShowcaseAttrMeta {
     title: Option<String>,
     tags: Vec<String>,
-    index: Option<i32>,
+    order: Option<i32>,
 }
 
 /// Parses the supported `#[showcase(...)]` and `#[story(...)]` metadata fields.
@@ -405,6 +426,12 @@ fn parse_showcase_component_attribute(
     attribute: &Attribute,
     path: &Path,
 ) -> Result<ShowcaseAttrMeta, String> {
+    // `#[showcase]` and `#[story]` are both valid with no arguments at all, in which
+    // case there is no nested meta to walk.
+    if !has_arguments(attribute) {
+        return Ok(ShowcaseAttrMeta { title: None, tags: Vec::new(), order: None });
+    }
+
     let mut title = None;
     let mut component = None;
     let mut name = None;
@@ -455,32 +482,51 @@ fn parse_showcase_component_attribute(
 
     let title = title;
 
-    Ok(ShowcaseAttrMeta { title, tags, index: None })
+    Ok(ShowcaseAttrMeta { title, tags, order: None })
 }
 
-/// Parses `#[provider(index = ...)]` metadata.
+/// Parses `#[provider(order = ...)]` metadata.
+///
+/// `order` is the only accepted spelling. The pre-0.1.0 name was `index`, and it is
+/// rejected here on purpose rather than aliased: two names for one concept is
+/// exactly what pinning a single spelling before the first release was meant to
+/// avoid.
 fn parse_provider_attribute(
     attribute: &Attribute,
     path: &Path,
 ) -> Result<ShowcaseAttrMeta, String> {
-    let mut index = None;
+    // A bare `#[provider]` takes the default order, like the macro does.
+    if !has_arguments(attribute) {
+        return Ok(ShowcaseAttrMeta { title: None, tags: Vec::new(), order: None });
+    }
+
+    let mut order = None;
 
     attribute
         .parse_nested_meta(|meta| {
-            if meta.path.is_ident("index") {
+            if meta.path.is_ident("order") {
                 let value: syn::LitInt = meta.value()?.parse()?;
-                index =
+                order =
                     Some(value.base10_parse::<i32>().map_err(|err| {
-                        meta.error(format!("provider index must fit in i32: {err}"))
+                        meta.error(format!("provider order must fit in i32: {err}"))
                     })?);
                 return Ok(());
             }
 
-            Err(meta.error("provider attributes only support index = <integer>"))
+            Err(meta.error("provider attributes only support order = <integer>"))
         })
         .map_err(|err| format!("invalid provider attribute in {}: {err}", path.display()))?;
 
-    Ok(ShowcaseAttrMeta { title: None, tags: Vec::new(), index })
+    Ok(ShowcaseAttrMeta { title: None, tags: Vec::new(), order })
+}
+
+/// Reports whether an attribute was written with a parenthesised argument list.
+///
+/// `syn`'s `parse_nested_meta` treats a bare `#[provider]` as a syntax error, but
+/// every showcase attribute is legal without arguments, so the bare form has to be
+/// recognised before parsing rather than reported as invalid.
+fn has_arguments(attribute: &Attribute) -> bool {
+    matches!(attribute.meta, syn::Meta::List(_))
 }
 
 /// Extracts the final identifier from a component path expression.
@@ -581,19 +627,21 @@ fn module_prefix_from_path(entry_src_dir: &Path, path: &Path) -> Result<Vec<Stri
     Ok(segments)
 }
 
-/// Returns the generated renderer helper name for a discovered component or story.
+/// Returns the renderer helper name the macros are expected to generate.
+///
+/// **Advisory.** Nothing links against this string any more — it is recorded in
+/// `StoryDefinition::renderer_symbol` so the manifest still describes what a scan
+/// believes the macros emitted. If the macro crate ever changes its naming, this
+/// goes stale and the only consequence is a manifest field that no longer matches.
 fn showcase_renderer_symbol(component_name: &str) -> String {
     format!("__dioxus_showcase_render__{component_name}")
 }
 
-/// Returns the generated provider wrapper helper name.
+/// Returns the provider wrapper helper name the macros are expected to generate.
+///
+/// Advisory, for the same reason as [`showcase_renderer_symbol`].
 fn showcase_provider_symbol(component_name: &str) -> String {
     format!("__dioxus_showcase_wrap__{component_name}")
-}
-
-/// Converts a generated renderer helper name into its story-constructor helper name.
-pub fn showcase_story_symbol(renderer_symbol: &str) -> String {
-    renderer_symbol.replacen("__dioxus_showcase_render__", "__dioxus_showcase_story__", 1)
 }
 
 /// Normalizes a title into the route id format used by generated stories.
@@ -642,10 +690,6 @@ mod tests {
     #[test]
     fn renderer_symbol_is_derived_from_component_name() {
         assert_eq!(showcase_renderer_symbol("Button"), "__dioxus_showcase_render__Button");
-        assert_eq!(
-            showcase_story_symbol("__dioxus_showcase_render__Button"),
-            "__dioxus_showcase_story__Button"
-        );
         assert_eq!(showcase_provider_symbol("Shell"), "__dioxus_showcase_wrap__Shell");
     }
 
@@ -656,29 +700,43 @@ mod tests {
         assert_eq!(slugify_title("Hello___World"), "hello-world");
     }
 
+    fn story_with_id(id: &str, module_path: &str) -> StoryDefinition {
+        StoryDefinition {
+            id: id.to_owned(),
+            title: id.to_owned(),
+            source_path: format!("/tmp/{module_path}.rs"),
+            module_path: module_path.to_owned(),
+            renderer_symbol: "__dioxus_showcase_render__demo".to_owned(),
+            tags: vec![],
+        }
+    }
+
     #[test]
-    fn duplicate_story_ids_are_rejected() {
+    fn duplicate_story_ids_are_reported_once_each() {
         let stories = vec![
-            StoryDefinition {
-                id: "atoms-button".to_owned(),
-                title: "Atoms/Button".to_owned(),
-                source_path: "/tmp/a/button.rs".to_owned(),
-                module_path: "a::button".to_owned(),
-                renderer_symbol: "button".to_owned(),
-                tags: vec![],
-            },
-            StoryDefinition {
-                id: "atoms-button".to_owned(),
-                title: "Atoms/Button/Alt".to_owned(),
-                source_path: "/tmp/b/button_alt.rs".to_owned(),
-                module_path: "b::button_alt".to_owned(),
-                renderer_symbol: "button_alt".to_owned(),
-                tags: vec![],
-            },
+            story_with_id("atoms-button", "a::button"),
+            story_with_id("atoms-button", "b::button_alt"),
+            story_with_id("atoms-button", "c::button_third"),
+            story_with_id("atoms-badge", "d::badge"),
+            story_with_id("atoms-badge", "e::badge_alt"),
+            story_with_id("atoms-card", "f::card"),
         ];
 
-        let err = validate_component_ids(&stories).expect_err("duplicate id should error");
-        assert!(err.contains("duplicate showcase id 'atoms-button'"));
+        assert_eq!(
+            duplicate_story_ids(&stories),
+            vec!["atoms-badge".to_owned(), "atoms-button".to_owned()]
+        );
+    }
+
+    #[test]
+    fn unique_story_ids_report_no_duplicates() {
+        let stories = vec![
+            story_with_id("atoms-button", "a::button"),
+            story_with_id("atoms-card", "b::card"),
+        ];
+
+        assert!(duplicate_story_ids(&stories).is_empty());
+        assert!(duplicate_story_ids(&[]).is_empty());
     }
 
     #[test]
@@ -788,6 +846,35 @@ fn button_primary() -> Element { todo!() }
         std::fs::write(
             &path,
             r#"
+#[provider(order = -10)]
+#[component]
+fn Shell(children: Element) -> Element { children }
+
+#[provider]
+#[component]
+fn Defaulted(children: Element) -> Element { children }
+"#,
+        )
+        .expect("write file");
+
+        let providers = discover_providers_in_file(&dir, &path).expect("discover providers");
+        assert_eq!(providers.len(), 2);
+        assert_eq!(providers[0].module_path, "provider::Shell");
+        assert_eq!(providers[0].wrap_symbol, "__dioxus_showcase_wrap__Shell");
+        assert_eq!(providers[0].order, -10);
+        // An omitted `order` means 0, matching the runtime default.
+        assert_eq!(providers[1].order, 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_pre_release_provider_index_spelling_is_rejected() {
+        let dir = temp_dir("dioxus-showcase-discover-provider-index");
+        let path = dir.join("provider.rs");
+        std::fs::write(
+            &path,
+            r#"
 #[provider(index = 2)]
 #[component]
 fn Shell(children: Element) -> Element { children }
@@ -795,11 +882,8 @@ fn Shell(children: Element) -> Element { children }
         )
         .expect("write file");
 
-        let providers = discover_providers_in_file(&dir, &path).expect("discover providers");
-        assert_eq!(providers.len(), 1);
-        assert_eq!(providers[0].module_path, "provider::Shell");
-        assert_eq!(providers[0].wrap_symbol, "__dioxus_showcase_wrap__Shell");
-        assert_eq!(providers[0].index, 2);
+        let err = discover_providers_in_file(&dir, &path).expect_err("index should be rejected");
+        assert!(err.contains("order = <integer>"), "{err}");
 
         let _ = std::fs::remove_dir_all(&dir);
     }

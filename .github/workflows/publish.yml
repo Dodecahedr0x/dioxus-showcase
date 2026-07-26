@@ -33,14 +33,13 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      # One invocation for the whole workspace. Cargo resolves the publish order
+      # from the dependency graph and waits for each crate to land in the index
+      # itself, which retires the old chain of per-crate invocations padded with
+      # fixed delays. It also covers every publishable member automatically, so a
+      # new crate cannot be forgotten here; `example/` is excluded by its own
+      # `publish = false`. Requires cargo >= 1.90, which `stable` above provides.
       - name: Publish crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo publish -p dioxus-showcase-core
-          sleep 20
-          cargo publish -p dioxus-showcase-macros
-          sleep 20
-          cargo publish -p dioxus-showcase
-          sleep 20
-          cargo publish -p dioxus-showcase-cli
+        run: cargo publish --workspace

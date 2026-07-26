@@ -1,30 +1,59 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use dioxus_showcase_core::{ProviderDefinition, ShowcaseConfig, StoryDefinition};
+use dioxus_showcase_core::ShowcaseConfig;
 use handlebars::{no_escape, Handlebars};
 use serde::Serialize;
 
-use crate::discovery::{showcase_story_symbol, slugify_title};
+use crate::discovery::slugify_title;
 
 const GENERATED_RUNTIME_TEMPLATE: &str = include_str!("templates/generated_runtime.rs.hbs");
-const SHOWCASE_MAIN_TEMPLATE: &str = include_str!("templates/showcase_main.rs.hbs");
 const SHOWCASE_CARGO_TEMPLATE: &str = include_str!("templates/showcase_cargo.toml.hbs");
 const SHOWCASE_DIOXUS_TEMPLATE: &str = include_str!("templates/showcase_dioxus.toml.hbs");
-const SHOWCASE_APP_CSS_TEMPLATE: &str = include_str!("templates/showcase_app.css");
+
+/// The generated showcase app's `Cargo.toml` renames the user's component crate to a
+/// fixed alias, so the entry point can name it without knowing the package name.
+pub const ENTRY_CRATE_ALIAS: &str = "showcase_entry";
+
+/// The showcase application's entry point, written **once** and never regenerated.
+///
+/// It is deliberately inline rather than a `.hbs` file: the twelve-kilobyte shell
+/// template this replaced now lives in `dioxus-showcase-ui` as compiled components,
+/// and what remains is small enough that keeping it beside the code that renders it
+/// is clearer than a separate file.
+///
+/// Two lines are load-bearing and must not be reordered away:
+///
+/// - `use {{entry_crate}} as _;` is the *entire* reason any story appears. It forces
+///   the component crate's rlib to be linked, which is what carries the `inventory`
+///   registrations into the binary. Nothing calls into that crate, so it looks like
+///   dead code — hence the comment that ships with it.
+/// - Each `document::Stylesheet` line exists here rather than in the shell library
+///   because `asset!()` resolves relative to the crate it is compiled in. A library
+///   can only link its own CSS; a user's stylesheet has to be named at the user's
+///   compile time, which is this file.
+const SHOWCASE_MAIN_TEMPLATE: &str = r#"// Generated once by dioxus-showcase. Safe to edit; never regenerated.
+use dioxus::prelude::*;
+use {{entry_crate}} as _; // LOAD-BEARING: forces rlib linkage so registrations survive
+
+fn main() {
+    launch(App);
+}
+
+#[component]
+fn App() -> Element {
+    rsx! {
+{{#each stylesheets}}
+        document::Stylesheet { href: asset!("{{this}}") }
+{{/each}}
+        dioxus_showcase_ui::ShowcaseApp { base_path: "{{base_path}}" }
+    }
+}
+"#;
 
 #[derive(Serialize)]
 struct RuntimeContext {
     generation: String,
-    components: Vec<RuntimeComponent>,
-    providers: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct RuntimeComponent {
-    source_path: String,
-    module_path: String,
-    story_path: String,
 }
 
 #[derive(Serialize)]
@@ -44,53 +73,38 @@ struct DioxusTemplateContext {
 
 #[derive(Serialize)]
 struct MainTemplateContext {
-    route_root: String,
-    route_component: String,
-    route_component_prefix: String,
-    route_not_found: String,
+    entry_crate: String,
+    base_path: String,
     stylesheets: Vec<String>,
 }
 
-/// Renders the generated runtime module that imports all discovered story constructors.
-pub fn render_generated_runtime_rs(
-    stories: &[StoryDefinition],
-    providers: &[ProviderDefinition],
-    generation: &str,
-) -> Result<String, String> {
-    let entry_crate_alias = "showcase_entry".to_owned();
-    let components = stories
-        .iter()
-        .map(|story| RuntimeComponent {
-            source_path: escape_rust_string(&story.source_path),
-            module_path: escape_rust_string(&story.module_path),
-            story_path: render_story_path(
-                &entry_crate_alias,
-                &story.module_path,
-                &story.renderer_symbol,
-            ),
-        })
-        .collect();
-    let providers = render_provider_paths(&entry_crate_alias, providers);
-
+/// Renders the generated runtime module.
+///
+/// This used to expand every discovered story into glue that named the macros'
+/// `__dioxus_showcase_*` symbols, which coupled the CLI's string conventions to the
+/// macro crate's output. Stories register themselves at link time now, so all that
+/// is left is a token identifying which discovery run produced the current tree.
+pub fn render_generated_runtime_rs(generation: &str) -> Result<String, String> {
     render_template(
         GENERATED_RUNTIME_TEMPLATE,
-        &RuntimeContext { generation: escape_rust_string(generation), components, providers },
+        &RuntimeContext { generation: escape_rust_string(generation) },
     )
 }
 
 /// Renders the showcase shell application's `main.rs`.
+///
+/// `stylesheets` are asset URLs relative to the generated app, as collected from the
+/// entry crate's `assets/` directory.
 pub fn render_showcase_app_main_rs(
-    _base_path: &str,
+    base_path: &str,
     stylesheets: &[String],
 ) -> Result<String, String> {
     render_template(
         SHOWCASE_MAIN_TEMPLATE,
         &MainTemplateContext {
-            route_root: "/".to_owned(),
-            route_component: "/component/:id".to_owned(),
-            route_component_prefix: "/component/".to_owned(),
-            route_not_found: "/:..route".to_owned(),
-            stylesheets: stylesheets.to_vec(),
+            entry_crate: ENTRY_CRATE_ALIAS.to_owned(),
+            base_path: escape_rust_string(&normalize_app_base_path(base_path)),
+            stylesheets: stylesheets.iter().map(|href| escape_rust_string(href)).collect(),
         },
     )
 }
@@ -127,9 +141,17 @@ pub fn render_showcase_app_dioxus_toml(config: &ShowcaseConfig) -> Result<String
     )
 }
 
-/// Returns the static CSS used by the generated showcase shell.
-pub fn render_showcase_app_css() -> &'static str {
-    SHOWCASE_APP_CSS_TEMPLATE
+/// Normalizes a configured base path into the form `ShowcaseApp` documents.
+///
+/// The prop is specified as `"/"` or `"/my-repo"` — a leading slash, and no trailing
+/// slash unless the whole value is one. Users write it every other way.
+fn normalize_app_base_path(base_path: &str) -> String {
+    let trimmed = base_path.trim().trim_matches('/');
+    if trimmed.is_empty() {
+        "/".to_owned()
+    } else {
+        format!("/{trimmed}")
+    }
 }
 
 /// Renders a Handlebars template with pre-escaped context values.
@@ -139,43 +161,6 @@ fn render_template<T: Serialize>(template: &str, context: &T) -> Result<String, 
     handlebars
         .render_template(template, context)
         .map_err(|err| format!("failed to render template: {err}"))
-}
-
-/// Builds the fully qualified path to a generated story constructor in the entry crate.
-fn render_story_path(entry_crate_alias: &str, module_path: &str, renderer_symbol: &str) -> String {
-    let story_symbol = showcase_story_symbol(renderer_symbol);
-    let mut segments: Vec<&str> =
-        module_path.split("::").filter(|segment| !segment.is_empty()).collect();
-    if segments.is_empty() {
-        return format!("{entry_crate_alias}::{story_symbol}");
-    }
-    segments.pop();
-    segments.push(story_symbol.as_str());
-    format!("{entry_crate_alias}::{}", segments.join("::"))
-}
-
-/// Builds fully qualified provider wrapper paths ordered by provider index.
-fn render_provider_paths(entry_crate_alias: &str, providers: &[ProviderDefinition]) -> Vec<String> {
-    let mut ordered = providers.to_vec();
-    ordered.sort_by_key(|provider| provider.index);
-    ordered
-        .into_iter()
-        .map(|provider| {
-            render_provider_path(entry_crate_alias, &provider.module_path, &provider.wrap_symbol)
-        })
-        .collect()
-}
-
-/// Builds the fully qualified path to a provider wrapper function in the entry crate.
-fn render_provider_path(entry_crate_alias: &str, module_path: &str, wrap_symbol: &str) -> String {
-    let mut segments: Vec<&str> =
-        module_path.split("::").filter(|segment| !segment.is_empty()).collect();
-    if segments.is_empty() {
-        return format!("{entry_crate_alias}::{wrap_symbol}");
-    }
-    segments.pop();
-    segments.push(wrap_symbol);
-    format!("{entry_crate_alias}::{}", segments.join("::"))
 }
 
 /// Reads the configured entry crate package name from its `Cargo.toml`.
@@ -268,6 +253,8 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    const GOLDEN_MAIN_RS: &str = include_str!("testdata/build_golden_main.rs");
+
     fn temp_dir(prefix: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -279,60 +266,17 @@ mod tests {
     }
 
     #[test]
-    fn generated_runtime_includes_components() {
-        let stories = vec![StoryDefinition {
-            id: "atoms-button".to_owned(),
-            title: "Atoms/Button".to_owned(),
-            source_path: "/workspace/src/button.rs".to_owned(),
-            module_path: "button_variants::Button".to_owned(),
-            renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
-            tags: vec!["atoms".to_owned()],
-        }];
+    fn generated_runtime_is_a_generation_token_and_nothing_else() {
+        let runtime = render_generated_runtime_rs("gen-1").expect("render runtime");
 
-        let runtime = render_generated_runtime_rs(&stories, &[], "gen-1").expect("render runtime");
-        assert!(
-            runtime.contains("pub fn showcase_components() -> Vec<ShowcaseComponentDefinition>")
-        );
         assert!(runtime.contains("pub const SHOWCASE_GENERATION: &str = \"gen-1\";"));
-        assert!(
-            runtime.contains("showcase_entry::button_variants::__dioxus_showcase_story__Button")
-        );
-        assert!(runtime.contains("duplicate showcase id '{}'"));
-        assert!(runtime.contains("r#\"button_variants::Button\"#"));
-        assert!(
-            runtime.contains("pub fn story_providers() -> Vec<::dioxus_showcase::StoryProvider>")
-        );
-    }
-
-    #[test]
-    fn generated_runtime_wraps_stories_with_providers() {
-        let stories = vec![StoryDefinition {
-            id: "atoms-button".to_owned(),
-            title: "Atoms/Button".to_owned(),
-            source_path: "/workspace/src/button.rs".to_owned(),
-            module_path: "button_variants::Button".to_owned(),
-            renderer_symbol: "__dioxus_showcase_render__Button".to_owned(),
-            tags: vec!["atoms".to_owned()],
-        }];
-        let providers = vec![
-            ProviderDefinition {
-                source_path: "/workspace/src/provider_a.rs".to_owned(),
-                module_path: "providers::Outer".to_owned(),
-                wrap_symbol: "__dioxus_showcase_wrap__Outer".to_owned(),
-                index: 0,
-            },
-            ProviderDefinition {
-                source_path: "/workspace/src/provider_b.rs".to_owned(),
-                module_path: "providers::Inner".to_owned(),
-                wrap_symbol: "__dioxus_showcase_wrap__Inner".to_owned(),
-                index: 1,
-            },
-        ];
-
-        let runtime =
-            render_generated_runtime_rs(&stories, &providers, "gen-2").expect("render runtime");
-        assert!(runtime.contains("showcase_entry::providers::__dioxus_showcase_wrap__Outer,"));
-        assert!(runtime.contains("showcase_entry::providers::__dioxus_showcase_wrap__Inner,"));
+        // The whole point of link-time registration: the CLI stops emitting glue
+        // that names symbols the macro crate invented.
+        assert!(!runtime.contains("__dioxus_showcase_"));
+        assert!(!runtime.contains("ShowcaseComponentDefinition"));
+        assert!(!runtime.contains("showcase_components"));
+        assert!(!runtime.contains("story_providers"));
+        assert_eq!(runtime.lines().count(), 2);
     }
 
     #[test]
@@ -358,6 +302,41 @@ mod tests {
         assert!(cargo_toml.contains("[workspace]"));
         assert!(cargo_toml.contains("showcase_entry = { package = \"basic-example\""));
         assert!(cargo_toml.contains("path = \"..\""));
+        // The shell is a library now, so the generated app has to depend on it.
+        assert!(cargo_toml.contains("dioxus-showcase-ui = "));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn showcase_cargo_pins_the_profiles_that_keep_registrations_linked() {
+        let dir = temp_dir("dioxus-showcase-templates-profile");
+        let entry_dir = dir.join("ui");
+        std::fs::create_dir_all(&entry_dir).expect("create entry dir");
+        std::fs::write(
+            entry_dir.join("Cargo.toml"),
+            "[package]\nname = \"ui\"\nversion = \"0.1.0\"\n",
+        )
+        .expect("write entry cargo");
+
+        let mut config = ShowcaseConfig::default();
+        config.project.entry_crate = entry_dir.to_string_lossy().to_string();
+        config.project.showcase_crate = dir.join("showcase").to_string_lossy().to_string();
+
+        let cargo_toml = render_showcase_app_cargo_toml(&config).expect("render cargo");
+        // On wasm32 the `use showcase_entry as _;` line in the generated entry point
+        // does not, on its own, pull the component crate's object out of its rlib —
+        // nothing references a symbol inside it, so the linker never selects the
+        // archive member and every registration in it is silently dropped. LTO
+        // merges the crate graph before that selection happens. Both profiles need
+        // it: `dx serve` builds through `dev`, `dx bundle --release` through
+        // `release`. Removing either line yields an empty showcase and no error.
+        assert!(cargo_toml.contains("[profile.dev]"));
+        assert!(cargo_toml.contains("lto = \"thin\""));
+        assert!(cargo_toml.contains("[profile.release]"));
+        assert!(cargo_toml.contains("lto = true"));
+        // `wasm-opt` aborts on release wasm that still carries DWARF.
+        assert!(cargo_toml.contains("strip = true"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -379,46 +358,55 @@ mod tests {
     }
 
     #[test]
-    fn showcase_main_renders_routes() {
-        let app = render_showcase_app_main_rs(
-            "/",
-            &["/assets/app.css".to_owned(), "/assets/styles/tailwind.css".to_owned()],
-        )
-        .expect("render app");
-        assert!(app.contains("#[route(\"/\")"));
-        assert!(app.contains("#[route(\"/component/:id\")"));
-        assert!(app.contains("#[route(\"/:..route\")"));
-        assert!(app.contains("fn Component(id: String) -> Element"));
-        assert!(app.contains("fn story_canvas(component: generated::ShowcaseComponentDefinition)"));
-        assert!(app.contains("section { class: \"canvas\", {story_canvas(component)} }"));
-        assert!(app.contains("ErrorBoundary {"));
-        assert!(app.contains("errors.clear_errors()"));
-        assert!(app.contains("Story render failed"));
-        assert!(app.contains("enum ThemeMode"));
-        assert!(app.contains("\"data-theme\": theme.read().as_str()"));
-        assert!(app.contains("class: \"theme-toggle\""));
-        assert!(app.contains("class: \"theme-toggle-track\""));
-        assert!(!app.contains("Back to list"));
-        assert!(!app.contains("components\" }"));
-        assert!(app.contains("document::Stylesheet { href: asset!(\"/assets/app.css\") }"));
-        assert!(
-            app.contains("document::Stylesheet { href: asset!(\"/assets/styles/tailwind.css\") }")
-        );
+    fn showcase_main_matches_the_golden_entry_point() {
+        let main_rs = render_showcase_app_main_rs("/", &[]).expect("render main");
+
+        assert_eq!(main_rs, GOLDEN_MAIN_RS);
     }
 
     #[test]
-    fn showcase_main_ignores_base_path_for_routes() {
-        let app = render_showcase_app_main_rs(
-            "/showcase/",
+    fn showcase_main_keeps_the_linkage_line_and_its_warning() {
+        let main_rs = render_showcase_app_main_rs("/", &[]).expect("render main");
+
+        // Deleting this line yields an empty showcase with no error at all, so the
+        // comment explaining it is as load-bearing as the line itself.
+        assert!(main_rs.contains("use showcase_entry as _;"));
+        assert!(main_rs.contains("LOAD-BEARING"));
+        assert!(main_rs.contains("dioxus_showcase_ui::ShowcaseApp { base_path: \"/\" }"));
+        // The shell reads the registry itself, so the entry point neither declares
+        // nor consumes the generated module.
+        assert!(!main_rs.contains("mod generated"));
+        assert!(!main_rs.contains("__dioxus_showcase_"));
+    }
+
+    #[test]
+    fn showcase_main_links_one_stylesheet_per_discovered_file() {
+        let main_rs = render_showcase_app_main_rs(
+            "/",
             &["/assets/app.css".to_owned(), "/assets/styles/tailwind.css".to_owned()],
         )
-        .expect("render app");
-        assert!(app.contains("#[route(\"/\")"));
-        assert!(app.contains("#[route(\"/component/:id\")"));
-        assert!(app.contains("#[route(\"/:..route\")"));
-        assert!(app.contains("document::Stylesheet { href: asset!(\"/assets/app.css\") }"));
-        assert!(
-            app.contains("document::Stylesheet { href: asset!(\"/assets/styles/tailwind.css\") }")
-        );
+        .expect("render main");
+
+        assert!(main_rs.contains("document::Stylesheet { href: asset!(\"/assets/app.css\") }"));
+        assert!(main_rs
+            .contains("document::Stylesheet { href: asset!(\"/assets/styles/tailwind.css\") }"));
+        // `asset!()` needs a literal at the *user's* compile time, which is why these
+        // live here and not in the shell library.
+        assert_eq!(main_rs.matches("document::Stylesheet").count(), 2);
+    }
+
+    #[test]
+    fn showcase_main_normalizes_the_base_path_prop() {
+        let root = render_showcase_app_main_rs("/", &[]).expect("render root");
+        assert!(root.contains("base_path: \"/\""));
+
+        let nested = render_showcase_app_main_rs("/my-repo/", &[]).expect("render nested");
+        assert!(nested.contains("base_path: \"/my-repo\""));
+
+        let bare = render_showcase_app_main_rs("my-repo", &[]).expect("render bare");
+        assert!(bare.contains("base_path: \"/my-repo\""));
+
+        let blank = render_showcase_app_main_rs("   ", &[]).expect("render blank");
+        assert!(blank.contains("base_path: \"/\""));
     }
 }
