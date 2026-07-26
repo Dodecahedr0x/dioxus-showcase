@@ -1,0 +1,24 @@
+# This file is checked in on purpose; every other file in this directory is generated
+# by `dioxus-showcase build` and is gitignored.
+#
+# `dioxus-showcase init` normally writes this manifest with a released `dioxus-showcase`
+# version from crates.io. Here it points at the crates in this workspace instead, so that
+# running the example exercises your local changes rather than the last published release.
+#
+# The package version is fixed at 0.0.0 because this crate is never published; keeping it
+# out of the workspace version scheme means `scripts/set-workspace-version.sh` has one
+# less file to keep in sync.
+[package]
+name = "dioxus-showcase-example-showcase"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# The generated app is its own workspace so it can build for wasm independently of the
+# root workspace.
+[workspace]
+
+[dependencies]
+dioxus = { version = "0.7", features = ["web", "router"] }
+dioxus-showcase = { path = "../../crates/dioxus-showcase" }
+showcase_entry = { package = "basic-example", path = ".." }

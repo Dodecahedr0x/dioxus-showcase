@@ -1,0 +1,12 @@
+[project]
+name = "dioxus-showcase-example"
+entry_crate = "example"
+showcase_crate = "example/showcase"
+
+[dev]
+port = 6111
+host = "127.0.0.1"
+
+[build]
+out_dir = "target/showcase"
+base_path = "/"

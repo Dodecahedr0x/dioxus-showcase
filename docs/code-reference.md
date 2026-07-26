@@ -75,7 +75,6 @@ These are not executable code, but they define intent and future direction:
 
 - `docs/rfcs/dioxus-showcase.md`
 - `docs/improvement-ideas.md`
-- `docs/worktree-tracks.md`
 
 They should be read as planning material, while this file documents current implementation.
 
@@ -421,12 +420,14 @@ Commands:
 - `init`
 - `dev`
 - `build`
+- `export`
 - `check`
 - `doctor`
 
 Additional args:
 
 - `BuildArgs { watch: bool }`
+- `ExportArgs { out_dir: Option<String>, base_path: Option<String>, debug: bool }`
 
 ### `crates/dioxus-showcase-cli/src/commands.rs`
 
@@ -449,6 +450,9 @@ Key functions:
   3. fallback `web`.
 - `prompt`
   Small stdin/stdout helper.
+- `dx_version_report`
+  Shells out to `dx --version` for `doctor`, reporting an install hint when it is missing.
+  Both `dev` and `export` depend on that binary.
 
 The init command is intentionally interactive. The other commands are non-interactive.
 
@@ -511,6 +515,49 @@ Helper:
 Important assumption:
 
 - The Dioxus CLI binary `dx` must already be installed and reachable in `PATH`.
+
+### `crates/dioxus-showcase-cli/src/export.rs`
+
+Static site production.
+
+What `cmd_export` does:
+
+1. loads config and rebuilds showcase artifacts, exactly like `cmd_build`.
+2. resolves the site directory (`--out-dir`, else `<build.out_dir>/site`) to an absolute path.
+3. resolves the base path (`--base-path`, else `[build].base_path`), trimmed of slashes.
+4. clears and re-creates the site directory.
+5. runs `dx bundle --platform web` into a `.dx-bundle` staging directory inside it.
+6. flattens the bundle's `public/` directory up into the site directory and removes the staging directory.
+7. writes `404.html` and `.nojekyll`, then prunes stale assets.
+
+Helpers:
+
+- `prepare_site_dir`
+  Clears the output directory, but only when it is empty or carries the
+  `.dioxus-showcase-site` marker this module writes. Any other non-empty directory is an
+  error, so `--out-dir docs` cannot silently delete hand-written files.
+- `run_dx_bundle`
+  Builds the `dx bundle` invocation. Release builds pass `--debug-symbols=false`, which
+  both shrinks the wasm and avoids a `wasm-opt` crash on the DWARF sections `dx` emits by
+  default.
+- `locate_bundle_root`
+  `dx bundle` writes its web output under `<out-dir>/public`; this tolerates both that
+  layout and a flat one.
+- `finalize_static_site`
+  Copies `index.html` to `404.html` so client-side routes survive a hard refresh on static
+  hosts, and writes `.nojekyll` for GitHub Pages.
+- `prune_unreferenced_assets`
+  `dx` accumulates every content-hashed asset it has ever produced in its own staging
+  directory and copies the whole directory into each bundle. This walks references
+  outward from the site's HTML files — html names the js, the js names the wasm, the wasm
+  embeds its own asset names — and deletes anything unreachable, so a site exported
+  repeatedly does not ship one wasm binary per build.
+
+Important assumptions:
+
+- The Dioxus CLI binary `dx` must already be installed and reachable in `PATH`.
+- Asset file names appear as literal byte sequences inside the files that reference them,
+  which is what makes the prune pass safe.
 
 ### `crates/dioxus-showcase-cli/src/discovery.rs`
 
@@ -696,7 +743,10 @@ Important details:
 
 ### `crates/dioxus-showcase-cli/src/templates/showcase_dioxus.toml.hbs`
 
-Small Dioxus config template setting app name, default platform, and output directory.
+Small Dioxus config template setting app name, default platform, and output directory,
+plus a `[web.app]` section carrying the browser tab title (derived from `[project].name`)
+and the configured base path. Without the title the exported site would fall back to the
+Dioxus CLI default of `dioxus | ⛺`.
 
 ### `crates/dioxus-showcase-cli/src/templates/showcase_app.css`
 

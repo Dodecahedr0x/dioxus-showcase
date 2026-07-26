@@ -11,6 +11,7 @@ use crate::build::cmd_build;
 use crate::check::cmd_check;
 use crate::cli::Command;
 use crate::dev::cmd_dev;
+use crate::export::cmd_export;
 use crate::scaffold::ensure_showcase_app_scaffold;
 use crate::scaffold::showcase_app_dir;
 
@@ -20,14 +21,26 @@ pub fn run(command: Option<Command>) -> Result<(), String> {
         Some(Command::Init) => cmd_init(),
         Some(Command::Dev) => cmd_dev(),
         Some(Command::Build(args)) => cmd_build(args),
+        Some(Command::Export(args)) => cmd_export(args),
         Some(Command::Check) => cmd_check(),
         Some(Command::Doctor) => {
             println!("dioxus-showcase doctor");
             println!("platform: {} {}", env::consts::OS, env::consts::ARCH);
             println!("cwd: {}", env::current_dir().map_err(|err| err.to_string())?.display());
+            println!("dioxus cli: {}", dx_version_report());
             Ok(())
         }
         None => Ok(()),
+    }
+}
+
+/// Reports the installed Dioxus CLI version, which `dev` and `export` both shell out to.
+fn dx_version_report() -> String {
+    match std::process::Command::new("dx").arg("--version").output() {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).trim().to_owned()
+        }
+        _ => "not found in PATH (install with `cargo install dioxus-cli`)".to_owned(),
     }
 }
 

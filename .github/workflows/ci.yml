@@ -7,7 +7,9 @@ on:
       - main
 
 jobs:
+  # Mirrors the pre-PR checklist in CONTRIBUTING.md. Keep the two in sync.
   checks:
+    name: Format, lint, test
     runs-on: ubuntu-latest
 
     steps:
@@ -30,3 +32,40 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace --all-targets --all-features
+
+  # Proves the documented first-run flow works on a clean checkout with no manual setup.
+  # This is what catches DioxusShowcase.toml or the example scaffold becoming untracked.
+  example:
+    name: Example pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Validate discovery against the example crate
+        run: cargo run -p dioxus-showcase-cli -- check
+
+      - name: Generate showcase artifacts
+        run: cargo run -p dioxus-showcase-cli -- build
+
+      - name: Assert the expected artifacts exist
+        run: |
+          test -f target/showcase/showcase.manifest.json
+          test -f example/showcase/src/generated.rs
+          test -f example/showcase/src/main.rs
+
+      - name: Assert generation is deterministic
+        run: |
+          cp example/showcase/src/generated.rs /tmp/generated.first
+          cargo run -p dioxus-showcase-cli -- build
+          diff /tmp/generated.first example/showcase/src/generated.rs
+
+      - name: Assert generated output left the working tree clean
+        run: git diff --exit-code

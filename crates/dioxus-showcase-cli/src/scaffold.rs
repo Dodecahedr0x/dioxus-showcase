@@ -142,7 +142,7 @@ fn stable_generation_token(
 }
 
 /// Recursively copies one directory tree into another.
-fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), String> {
+pub fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), String> {
     fs::create_dir_all(to).map_err(|err| format!("failed to create {}: {err}", to.display()))?;
 
     for entry in
