@@ -19,11 +19,12 @@ The top-level `README.md` reflects the current prototype scope more accurately t
 When working in this repository, orient yourself in this order:
 
 1. `README.md`
-2. `Cargo.toml`
-3. `crates/dioxus-showcase-cli/src/commands.rs`
-4. the crate or module you are changing
-5. `example/README.md` if the change affects story authoring or discovery
-6. `docs/rfcs/dioxus-showcase.md` only for intended direction, not for assuming already-shipped behavior
+2. `CONTRIBUTING.md` for the verification commands and which files are generated
+3. `Cargo.toml`
+4. `crates/dioxus-showcase-cli/src/commands.rs`
+5. the crate or module you are changing
+6. `example/README.md` if the change affects story authoring or discovery
+7. `docs/rfcs/dioxus-showcase.md` only for intended direction, not for assuming already-shipped behavior
 
 ## Workspace Layout
 
@@ -43,11 +44,16 @@ Top-level workspace members:
 Other important paths:
 
 - `DioxusShowcase.toml`
-  Local config consumed by the CLI.
+  The repo's own CLI config, checked in and pointing at `example/`. Because it is tracked,
+  every command works straight from a clone without running the interactive `init`.
+- `CONTRIBUTING.md`
+  Prerequisites, pre-PR checklist, generated-file map, and release process.
+- `docs/static-site.md`
+  How `export` works and how to deploy its output.
 - `docs/rfcs/dioxus-showcase.md`
   Product direction and intended architecture.
 - `docs/improvement-ideas.md`
-  Design notes; useful for future-facing work.
+  Backlog of remaining work, plus a list of what has already shipped.
 - `scripts/set-workspace-version.sh`
   Release helper.
 - `scripts/verify-workspace-version.sh`
@@ -120,8 +126,10 @@ The repository is in a prototype state. The implemented command flow is:
    Generates runtime artifacts such as the manifest and `generated.rs`.
 4. `dev`
    Rebuilds generated artifacts and launches the Dioxus app through `dx serve`.
-5. `doctor`
-   Prints basic host diagnostics.
+5. `export`
+   Rebuilds generated artifacts and compiles them into a deployable static site through `dx bundle`.
+6. `doctor`
+   Prints basic host diagnostics, including the detected `dx` version.
 
 Do not assume the RFC’s target architecture is fully implemented. For example, some prototype behavior still relies on generated source and include-like integration patterns.
 
@@ -132,7 +140,12 @@ There are generated files in this repository and in the example app. Before edit
 Common generated artifacts:
 
 - `example/showcase/src/generated.rs`
-- `example/target/showcase/showcase.manifest.json`
+- `example/showcase/src/main.rs`
+- `example/showcase/Dioxus.toml`
+- `target/showcase/showcase.manifest.json`
+
+The one hand-maintained file in `example/showcase/` is its `Cargo.toml`; see
+`CONTRIBUTING.md` for why it is checked in while the rest of the directory is gitignored.
 
 Rules:
 
@@ -190,7 +203,10 @@ The example currently demonstrates:
 
 ## Commands
 
-Run commands from the repository root unless a task clearly requires otherwise.
+Run commands from the repository root unless a task clearly requires otherwise. No setup
+step is needed: `DioxusShowcase.toml` is checked in, so `check`, `build`, `dev`, and
+`export` all work directly from a clone. Do not run `init` unless you are specifically
+testing that flow, because it overwrites that config.
 
 Useful commands:
 
@@ -199,6 +215,7 @@ cargo test --workspace --all-targets
 cargo run -p dioxus-showcase-cli -- check
 cargo run -p dioxus-showcase-cli -- build
 cargo run -p dioxus-showcase-cli -- dev
+cargo run -p dioxus-showcase-cli -- export
 ```
 
 Release-oriented commands from the existing docs:

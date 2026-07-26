@@ -41,13 +41,28 @@ pub fn pill_button_primary(label: String) -> Element {
 
 ## Run It From Repo Root
 
+No setup step is required. The repo's `DioxusShowcase.toml` is checked in and already
+points at this crate, so these work straight from a clone:
+
 ```bash
-cargo run -p dioxus-showcase-cli -- check
-cargo run -p dioxus-showcase-cli -- build
-cargo run -p dioxus-showcase-cli -- dev
+cargo run -p dioxus-showcase-cli -- check    # validate discovery
+cargo run -p dioxus-showcase-cli -- build    # regenerate showcase/ sources
+cargo run -p dioxus-showcase-cli -- dev      # serve it (needs dx)
+cargo run -p dioxus-showcase-cli -- export   # build a static site (needs dx)
 ```
+
+Do not run `init` here — it is for setting up a new project and would overwrite the
+checked-in config.
+
+## The `showcase/` Subdirectory
+
+`showcase/` is the generated app. Everything in it is written by `build` and gitignored,
+except `showcase/Cargo.toml`, which is checked in so the generated app depends on the
+crates in this workspace rather than the published releases. Change the templates in
+`crates/dioxus-showcase-cli/src/templates/` rather than editing generated files.
 
 ## Read More
 
+- Contributor guide: [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
 - Full reference: [`../docs/code-reference.md`](../docs/code-reference.md)
 - Top-level overview: [`../README.md`](../README.md)
