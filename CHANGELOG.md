@@ -11,6 +11,32 @@ you get** — read the whole section for a version before upgrading to it.
 
 ## [Unreleased]
 
+### Added
+
+- **`#[default = <expression>]` on a story or showcase parameter**, setting what
+  that parameter's control opens on. Without it a control opens on
+  `StoryArg::story_arg()` — `0` for numbers, `false` for bools, `"Lorem Ipsum"`
+  for strings — which exists to be *a* value rather than a meaningful one. A
+  story with a documented default had nowhere to say so, leaving every control
+  showing a value the preview was not rendering, and leaving `0` and
+  `"Lorem Ipsum"` unreachable for any story that worked around it by treating
+  the seed as "untouched". String literals are widened with `String::from`, so
+  `#[default = "currentColor"]` is enough; every other type takes the expression
+  as written, which keeps integer literals inferring against the parameter's own
+  type rather than through an ambiguous `Into`.
+
+  ```rust
+  #[story(title = "Loading/Spinner")]
+  fn spinner(
+      #[default = 32.0] size: f64,
+      #[default = "currentColor"] color: String,
+  ) -> Element {
+      rsx! { Spinner { size, color } }
+  }
+  ```
+
+  Purely additive: a parameter without the attribute keeps the seed it had.
+
 ### Changed
 
 - **The showcase is titled after the package it belongs to.** The generated

@@ -1,0 +1,7 @@
+error: a showcase parameter takes at most one #[default]
+ --> tests/ui/story_with_two_defaults.rs:3:1
+  |
+3 | #[story(title = "Bad/TwoDefaults")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `story` (in Nightly builds, run with -Z macro-backtrace for more info)

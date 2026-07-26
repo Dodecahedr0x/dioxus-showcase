@@ -4,7 +4,7 @@ use syn::FnArg;
 
 use crate::utils::{
     is_single_props_argument, parse_showcase_meta, render_controlled_story_component,
-    slugify_title, story_arg_bindings, story_registration,
+    slugify_title, story_arg_bindings, story_registration, strip_param_attrs,
 };
 
 /// Expands `#[showcase]` into generated renderer, factory, and story constructor helpers.
@@ -19,8 +19,7 @@ pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
         }
     };
 
-    let item_ts = item;
-    let item_fn: syn::ItemFn = match syn::parse2(item_ts.clone()) {
+    let mut item_fn: syn::ItemFn = match syn::parse2::<syn::ItemFn>(item) {
         Ok(func) => func,
         Err(err) => {
             // `Display`, not `Debug`: the `Debug` form of a `syn::Error` is an
@@ -32,7 +31,10 @@ pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
         }
     };
 
-    let signature = item_fn.sig;
+    // Clone before stripping: the bindings below read `#[default = …]` off the
+    // parameters, and the re-emitted function must not carry it.
+    let signature = item_fn.sig.clone();
+    strip_param_attrs(&mut item_fn);
     let component_name = signature.ident.clone();
     let story_title = showcase_meta.title.unwrap_or_else(|| component_name.to_string());
     let story_id = slugify_title(&story_title);
@@ -146,7 +148,7 @@ pub fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
 
     quote! {
         #[warn(non_camel_case_types)]
-        #item_ts
+        #item_fn
         #controls_component
 
         #[doc(hidden)]

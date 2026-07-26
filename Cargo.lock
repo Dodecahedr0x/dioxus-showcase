@@ -1103,6 +1103,7 @@ version = "0.1.0"
 dependencies = [
  "dioxus",
  "dioxus-showcase",
+ "dioxus-ssr",
  "proc-macro2",
  "quote",
  "syn",

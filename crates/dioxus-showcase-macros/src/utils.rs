@@ -50,17 +50,18 @@ pub fn story_arg_bindings(
 
         let ident = &pattern.ident;
         let ty = &typed.ty;
+        let initial = param_default(&typed.attrs, ty)?;
         if let Some(control) = render_story_control(ident, ty) {
             has_controls = true;
             state_bindings.push(quote! {
-                let mut #ident = ::dioxus::prelude::use_signal(|| <#ty as ::dioxus_showcase::StoryArg>::story_arg());
+                let mut #ident = ::dioxus::prelude::use_signal(|| #initial);
             });
             render_args.push(quote! { #ident() });
             component_props.push(quote! { #ident: #ident(), });
             controls.push(control);
         } else {
             state_bindings.push(quote! {
-                let #ident: #ty = <#ty as ::dioxus_showcase::StoryArg>::story_arg();
+                let #ident: #ty = #initial;
             });
             render_args.push(quote! { #ident });
             component_props.push(quote! { #ident: #ident, });
@@ -68,6 +69,61 @@ pub fn story_arg_bindings(
     }
 
     Ok(StoryArgBindings { state_bindings, render_args, component_props, controls, has_controls })
+}
+
+/// The expression a parameter's control opens on.
+///
+/// `#[default = <expr>]` on the parameter when present, otherwise
+/// `StoryArg::story_arg()` — `0`, `false`, `"Lorem Ipsum"`. Without a default a
+/// control opens on a value the preview is usually not rendering, because the
+/// seed exists to be *a* value rather than a meaningful one: a story that wants
+/// a 32px spinner has nowhere to say so, and the number beside it reads `0`.
+///
+/// String literals are widened with `String::from`, so the common case is
+/// `#[default = "currentColor"]` rather than `#[default = "currentColor".to_owned()]`.
+/// Every other type takes the expression as written, which keeps integer
+/// literals inferring against the parameter's own type instead of going through
+/// an ambiguous `Into`.
+fn param_default(attrs: &[syn::Attribute], ty: &Type) -> Result<TokenStream2, String> {
+    let mut found: Option<syn::Expr> = None;
+
+    for attr in attrs {
+        if !attr.path().is_ident("default") {
+            continue;
+        }
+        let Meta::NameValue(named) = &attr.meta else {
+            return Err(
+                "showcase parameter defaults are written #[default = <expression>]".to_owned()
+            );
+        };
+        if found.is_some() {
+            return Err("a showcase parameter takes at most one #[default]".to_owned());
+        }
+        found = Some(named.value.clone());
+    }
+
+    let Some(expr) = found else {
+        return Ok(quote! { <#ty as ::dioxus_showcase::StoryArg>::story_arg() });
+    };
+
+    if is_type_ident(ty, "String") {
+        return Ok(quote! { ::std::string::String::from(#expr) });
+    }
+
+    Ok(quote! { #expr })
+}
+
+/// Strips `#[default = …]` from a function's parameters.
+///
+/// The attribute is read by [`story_arg_bindings`] and is not a real attribute
+/// anywhere else, so it has to come off before the function is re-emitted —
+/// rustc rejects an unknown attribute on a parameter.
+pub fn strip_param_attrs(item: &mut syn::ItemFn) {
+    for input in &mut item.sig.inputs {
+        if let FnArg::Typed(typed) = input {
+            typed.attrs.retain(|attr| !attr.path().is_ident("default"));
+        }
+    }
 }
 
 /// Renders a hidden Dioxus component that hosts the preview and any generated controls.

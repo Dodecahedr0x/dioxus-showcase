@@ -269,3 +269,45 @@ fn registration_captures_the_call_site_file_and_module_path() {
 fn providers_register_themselves_at_link_time() {
     assert_eq!(dioxus_showcase::registered_providers().len(), 1);
 }
+
+#[story(title = "Controls/Defaults")]
+fn story_with_param_defaults(
+    #[default = 32.0] size: f64,
+    #[default = "currentColor"] color: String,
+    #[default = 6] count: usize,
+    #[default = true] filled: bool,
+) -> Element {
+    rsx! { "{size} {color} {count} {filled}" }
+}
+
+#[test]
+fn param_defaults_seed_the_controls_and_the_preview() {
+    // The rendered markup carries both halves: the preview reflects the
+    // defaults, and each control input opens on the same value rather than on
+    // `StoryArg`'s placeholder seed.
+    let mut dom = VirtualDom::new(__dioxus_showcase_render__story_with_param_defaults);
+    dom.rebuild_in_place();
+    let html = dioxus_ssr::render(&dom);
+
+    assert!(html.contains("32 currentColor 6 true"), "preview: {html}");
+    assert!(html.contains(r#"type="number" value="32""#), "size control: {html}");
+    assert!(html.contains(r#"type="text" value="currentColor""#), "color control: {html}");
+    assert!(html.contains(r#"type="number" value="6""#), "count control: {html}");
+    // dioxus-ssr emits boolean attributes unquoted.
+    assert!(html.contains(r#"type="checkbox" checked=true"#), "bool control: {html}");
+}
+
+#[story(title = "Controls/NoDefaults")]
+fn story_without_param_defaults(size: f64, color: String) -> Element {
+    rsx! { "{size} {color}" }
+}
+
+#[test]
+fn a_parameter_without_a_default_still_falls_back_to_the_story_arg_seed() {
+    let mut dom = VirtualDom::new(__dioxus_showcase_render__story_without_param_defaults);
+    dom.rebuild_in_place();
+    let html = dioxus_ssr::render(&dom);
+
+    assert!(html.contains("0 Lorem Ipsum"), "preview: {html}");
+    assert!(html.contains(r#"type="number" value="0""#), "size control: {html}");
+}
