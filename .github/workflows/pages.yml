@@ -1,0 +1,139 @@
+name: Docs site
+
+on:
+  push:
+    branches:
+      - main
+  # So the site can be republished without an empty commit, e.g. after changing a
+  # repository setting or re-running a failed deploy.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race for the same environment. Not `cancel-in-progress`: a
+# half-finished Pages deployment that gets cancelled can leave the site on a mixed set
+# of files, so an in-flight deploy is allowed to land before the next one starts.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Pinned so the cache keys below are deterministic and a new release cannot change what
+  # gets built without a commit. Keep DIOXUS_CLI_VERSION in step with ci.yml.
+  MDBOOK_VERSION: "0.5.4"
+  DIOXUS_CLI_VERSION: "0.7.9"
+  # Project Pages serve from https://<user>.github.io/<repo>/, never the domain root, so
+  # every absolute path in the built output has to carry this prefix.
+  SITE_BASE_PATH: "/dioxus-showcase"
+
+jobs:
+  build:
+    name: Build docs and live showcase
+    runs-on: ubuntu-latest
+    # The showcase half is a wasm release build from cold on a cache miss; bounded so a
+    # hang costs an hour rather than the six-hour default.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Swatinem/rust-cache does not cache ~/.cargo/bin, and building mdbook and the
+      # Dioxus CLI from source is by far the most expensive part of a cold run. Cache
+      # both binaries, keyed on their pinned versions so a bump invalidates them.
+      - name: Cache the mdbook and dx binaries
+        id: cache-bins
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/mdbook
+            ~/.cargo/bin/dx
+          key: docs-bins-${{ runner.os }}-mdbook${{ env.MDBOOK_VERSION }}-dx${{ env.DIOXUS_CLI_VERSION }}
+
+      - name: Install mdbook
+        if: steps.cache-bins.outputs.cache-hit != 'true'
+        run: cargo install mdbook --version ${{ env.MDBOOK_VERSION }} --locked
+
+      - name: Install the Dioxus CLI
+        if: steps.cache-bins.outputs.cache-hit != 'true'
+        run: cargo install dioxus-cli --version ${{ env.DIOXUS_CLI_VERSION }} --locked
+
+      - name: Build the book
+        run: mdbook build docs-site
+
+      # `build` downgrades duplicate story ids to warnings; only `check` still errors on
+      # them. Run it first so a collision fails in seconds instead of after a wasm build
+      # that would have "succeeded" with a broken demo.
+      - name: Validate discovery before exporting
+        run: cargo run -p dioxus-showcase-cli -- check
+
+      # The live demo is the project dogfooding itself: the showcase of the example crate,
+      # exported by the very tool these docs document. It is nested one level under the
+      # book, so its base path carries both segments.
+      - name: Export the live showcase
+        run: |
+          cargo run -p dioxus-showcase-cli -- export \
+            --out-dir "$RUNNER_TEMP/showcase-site" \
+            --base-path "${SITE_BASE_PATH}/showcase"
+
+      # A showcase whose registrations were dropped still produces a complete-looking site
+      # — index.html, 404.html and a populated assets/ — and renders empty in the browser.
+      # Only the wasm itself can tell us the stories actually linked in.
+      - name: Assert the demo is not silently empty
+        run: |
+          set -euo pipefail
+          site="$RUNNER_TEMP/showcase-site"
+          test -f "$site/index.html"
+          test -f "$site/404.html"
+          test -n "$(find "$site/assets" -type f -print -quit)"
+          wasm=$(find "$site/assets" -name '*.wasm' -print -quit)
+          test -n "$wasm"
+          echo "Inspecting $wasm ($(wc -c < "$wasm") bytes)"
+          grep -qa PillButtonControllable "$wasm"
+          grep -qa pill_button_primary "$wasm"
+
+      - name: Assemble the site
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp -r docs-site/book/. _site/
+          mkdir -p _site/showcase
+          cp -r "$RUNNER_TEMP/showcase-site/." _site/showcase/
+          # Pages serves the artifact directly and does not run Jekyll, but the marker
+          # costs nothing and keeps the output identical to what `export` ships.
+          touch _site/.nojekyll
+          test -f _site/index.html
+          test -f _site/showcase/index.html
+          echo "--- assembled site ---"
+          find _site -maxdepth 2 -name '*.html' | sort
+
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -12,3 +12,6 @@ target/
 
 # Local editor and agent caches.
 /.serena/
+
+# mdBook output for the docs site
+docs-site/book/

@@ -4,6 +4,9 @@ Storybook-style tooling for [Dioxus](https://dioxuslabs.com). Annotate your comp
 run one command, and get a browsable showcase app — or a static website you can deploy
 anywhere.
 
+**[Documentation](https://dodecahedr0x.github.io/dioxus-showcase/)** ·
+**[Live showcase demo](https://dodecahedr0x.github.io/dioxus-showcase/showcase/)**
+
 > **Status: alpha (`0.x`).** It works and it is used, but the API and the generated
 > output still break between minor releases. Concretely, what alpha means here:
 > breaking changes ship in `0.x` releases, there is no deprecation cycle and there are
@@ -205,6 +208,13 @@ files are generated, and the release process.
 The first five are published to crates.io; `example` is not.
 
 ## Documentation
+
+The full documentation site is at
+<https://dodecahedr0x.github.io/dioxus-showcase/>, with the example crate's showcase
+deployed live at
+[`/showcase/`](https://dodecahedr0x.github.io/dioxus-showcase/showcase/) — built by this
+tool's own `export` command on every push to `main`. Its source is the mdBook in
+[`docs-site/`](docs-site/).
 
 - Release history and breaking changes: [`CHANGELOG.md`](CHANGELOG.md)
 - Static site publishing: [`docs/static-site.md`](docs/static-site.md)

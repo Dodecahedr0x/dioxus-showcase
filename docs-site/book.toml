@@ -1,0 +1,35 @@
+[book]
+title = "Dioxus Showcase"
+description = "Storybook-style tooling for Dioxus: annotate your components, get a browsable showcase app or a deployable static site."
+authors = ["Dodecahedr0x"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+# The chapters that pull in CHANGELOG.md, docs/static-site.md and docs/code-reference.md
+# with {{#include}} reach outside src/, which mdBook rejects unless this is off.
+create-missing = false
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/Dodecahedr0x/dioxus-showcase"
+edit-url-template = "https://github.com/Dodecahedr0x/dioxus-showcase/edit/main/docs-site/{path}"
+# Project Pages are served from a sub-path, never the domain root. mdBook emits relative
+# links for navigation, but the 404 page is served at arbitrary depths and needs this to
+# resolve its assets.
+site-url = "/dioxus-showcase/"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.search]
+enable = true
+limit-results = 20
+
+[output.html.playground]
+# The samples here are Dioxus components; the Rust playground cannot build them, so the
+# Run button would only ever produce confusing errors.
+runnable = false

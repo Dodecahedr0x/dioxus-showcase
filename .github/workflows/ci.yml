@@ -11,6 +11,8 @@ env:
   # cannot change what CI builds without a commit. Bump alongside the `dioxus`
   # dependency in Cargo.toml.
   DIOXUS_CLI_VERSION: "0.7.9"
+  # Keep in step with the same variable in pages.yml, which builds the deployed site.
+  MDBOOK_VERSION: "0.5.4"
 
 jobs:
   # Mirrors the pre-PR checklist in CONTRIBUTING.md. Keep the two in sync.
@@ -49,6 +51,52 @@ jobs:
       # a standalone job would recompile the whole dependency tree from cold.
       - name: Package all published crates (dry run)
         run: cargo publish --workspace --dry-run
+
+  # The docs site deploys from `main` only, so without this a book that fails to build
+  # is discovered after merge, with the site already stale. Chapters that pull in
+  # CHANGELOG.md or docs/*.md by {{#include}} break when those files move, which is
+  # exactly the kind of edit that looks harmless in review.
+  docs:
+    name: Docs site builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the mdbook binary
+        id: cache-mdbook
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/mdbook
+          key: mdbook-${{ runner.os }}-${{ env.MDBOOK_VERSION }}
+
+      - name: Install mdbook
+        if: steps.cache-mdbook.outputs.cache-hit != 'true'
+        run: cargo install mdbook --version ${{ env.MDBOOK_VERSION }} --locked
+
+      - name: Build the book
+        run: mdbook build docs-site
+
+      # `mdbook build` exits 0 on an {{#include}} whose target is missing — it renders
+      # the unresolved directive into the page instead. Catch that, or a moved file
+      # silently ships a chapter containing literal `{{#include ...}}` text.
+      - name: Assert every include resolved
+        run: |
+          set -euo pipefail
+          # contributing.html documents the directive on purpose, escaped as \{{#include}},
+          # so it legitimately contains the bare token and is excluded here.
+          if grep -rl '{{#include' docs-site/book --include='*.html' \
+               | grep -v -e 'contributing.html' -e 'print.html'; then
+            echo "::error::a chapter shipped an unresolved {{#include}} directive"
+            exit 1
+          fi
+          test -s docs-site/book/changelog.html
+          test -s docs-site/book/code-reference.html
 
   # The declared `rust-version = "1.85"` cannot be allowed to rot. 1.85 is not a
   # style preference: below it `inventory`'s wasm support fails SILENTLY, yielding
